@@ -1,0 +1,22 @@
+# Node
+node_modules/
+apps/web/dist/
+apps/web/.vite/
+
+# Go
+services/api/bin/
+*.exe
+*.test
+*.out
+
+# Env
+.env
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
