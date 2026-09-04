@@ -8,6 +8,7 @@ import (
 type Config struct {
 	APIPort     string
 	DatabaseURL string
+	JWTSecret   string
 }
 
 func Load() (*Config, error) {
@@ -16,9 +17,15 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		return nil, fmt.Errorf("JWT_SECRET is required")
+	}
+
 	return &Config{
 		APIPort:     getEnv("API_PORT", "8080"),
 		DatabaseURL: dbURL,
+		JWTSecret:   jwtSecret,
 	}, nil
 }
 

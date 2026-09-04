@@ -27,7 +27,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	router := httpserver.NewRouter(logger, pool)
+	router := httpserver.NewRouter(logger, pool, cfg.JWTSecret)
 
 	logger.Info("starting server", "port", cfg.APIPort)
 	if err := http.ListenAndServe(":"+cfg.APIPort, router); err != nil {

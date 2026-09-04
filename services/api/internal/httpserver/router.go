@@ -9,18 +9,50 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/auth"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/handlers"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/users"
 )
 
-func NewRouter(logger *slog.Logger, pool *pgxpool.Pool) http.Handler {
+func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(requestLogger(logger))
 	r.Use(middleware.Recoverer)
+	r.Use(corsMiddleware)
 
 	r.Get("/healthz", handlers.Health(pool))
 
+	userRepo := users.NewRepository(pool)
+	userService := users.NewService(userRepo)
+	authHandler := handlers.NewAuthHandler(userService, jwtSecret)
+
+	r.Route("/api/auth", func(r chi.Router) {
+		r.Post("/register", authHandler.Register)
+		r.Post("/login", authHandler.Login)
+
+		r.Group(func(r chi.Router) {
+			r.Use(auth.Middleware(jwtSecret))
+			r.Get("/me", authHandler.Me)
+		})
+	})
+
 	return r
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
