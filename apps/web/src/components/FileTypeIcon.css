@@ -1,0 +1,52 @@
+.file-type-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.file-type-icon-red {
+  background: var(--error-soft);
+  color: var(--error);
+}
+
+.file-type-icon-blue {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.file-type-icon-purple {
+  background: rgba(168, 85, 247, 0.14);
+  color: #a855f7;
+}
+
+.file-type-icon-green {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.file-type-icon-orange {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.file-type-icon-teal {
+  background: rgba(20, 184, 166, 0.14);
+  color: #14b8a6;
+}
+
+.file-type-icon-yellow {
+  background: rgba(234, 179, 8, 0.14);
+  color: #ca8a04;
+}
+
+.file-type-icon-gray {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
