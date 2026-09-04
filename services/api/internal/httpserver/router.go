@@ -7,17 +7,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/handlers"
 )
 
-func NewRouter(logger *slog.Logger) http.Handler {
+func NewRouter(logger *slog.Logger, pool *pgxpool.Pool) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(requestLogger(logger))
 	r.Use(middleware.Recoverer)
 
-	r.Get("/healthz", handlers.Health)
+	r.Get("/healthz", handlers.Health(pool))
 
 	return r
 }

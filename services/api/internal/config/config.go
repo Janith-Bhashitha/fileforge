@@ -1,14 +1,24 @@
 package config
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
 type Config struct {
-	APIPort string
+	APIPort     string
+	DatabaseURL string
 }
 
 func Load() (*Config, error) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		return nil, fmt.Errorf("DATABASE_URL is required")
+	}
+
 	return &Config{
-		APIPort: getEnv("API_PORT", "8080"),
+		APIPort:     getEnv("API_PORT", "8080"),
+		DatabaseURL: dbURL,
 	}, nil
 }
 
