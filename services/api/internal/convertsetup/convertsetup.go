@@ -31,5 +31,11 @@ func BuildRegistry() *convert.Registry {
 	reg.Register("pdf-merge", "v1", pdfops.MergeProcessor{})
 	reg.Register("pdf-split", "v1", pdfops.SplitProcessor{})
 	reg.Register("pdf-compress", "v1", pdfops.CompressProcessor{})
+	reg.Register("pdf-rotate", "v1", pdfops.RotateProcessor{})
+	reg.Register("pdf-remove-pages", "v1", pdfops.RemovePagesProcessor{})
+	reg.Register("pdf-extract-pages", "v1", pdfops.ExtractPagesProcessor{})
+	reg.Register("pdf-watermark", "v1", pdfops.WatermarkProcessor{})
+	reg.Register("pdf-protect", "v1", pdfops.ProtectProcessor{})
+	reg.Register("pdf-unlock", "v1", pdfops.UnlockProcessor{})
 	return reg
 }

@@ -17,6 +17,7 @@ type Batch struct {
 	ID        uuid.UUID
 	OwnerID   uuid.UUID
 	Operation string
+	Options   map[string]string
 	Total     int
 	Completed int
 	Failed    int

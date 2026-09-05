@@ -36,3 +36,28 @@
   background: var(--error-soft);
   color: var(--error);
 }
+
+.status-badge-created {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.status-badge-retry_pending {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.status-badge-cancel_requested {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.status-badge-cancelled {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.status-badge-partially_completed {
+  background: var(--warning-soft);
+  color: var(--warning);
+}

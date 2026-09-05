@@ -1,0 +1,1 @@
+ALTER TABLE batches ADD COLUMN options JSONB NOT NULL DEFAULT '{}'::jsonb;

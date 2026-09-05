@@ -20,16 +20,19 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, b *Batch) error {
+	if b.Options == nil {
+		b.Options = map[string]string{}
+	}
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO batches (id, owner_id, operation, total, status) VALUES ($1,$2,$3,$4,$5)`,
-		b.ID, b.OwnerID, b.Operation, b.Total, b.Status,
+		`INSERT INTO batches (id, owner_id, operation, options, total, status) VALUES ($1,$2,$3,$4,$5,$6)`,
+		b.ID, b.OwnerID, b.Operation, b.Options, b.Total, b.Status,
 	)
 	return err
 }
 
 func (r *Repository) GetByID(ctx context.Context, id, ownerID uuid.UUID) (*Batch, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT id, owner_id, operation, total, completed, failed, status, created_at, updated_at
+		`SELECT id, owner_id, operation, options, total, completed, failed, status, created_at, updated_at
 		 FROM batches WHERE id = $1 AND owner_id = $2`,
 		id, ownerID,
 	)
@@ -86,7 +89,7 @@ func (r *Repository) ResetForRetry(ctx context.Context, id uuid.UUID, count int)
 
 func scanBatch(row pgx.Row) (*Batch, error) {
 	var b Batch
-	err := row.Scan(&b.ID, &b.OwnerID, &b.Operation, &b.Total, &b.Completed, &b.Failed, &b.Status, &b.CreatedAt, &b.UpdatedAt)
+	err := row.Scan(&b.ID, &b.OwnerID, &b.Operation, &b.Options, &b.Total, &b.Completed, &b.Failed, &b.Status, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound

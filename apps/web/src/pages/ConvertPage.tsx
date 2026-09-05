@@ -9,12 +9,24 @@ interface FileResponse {
   size: number
 }
 
+// Some operations need a value only the user can supply (which pages, what
+// watermark text, which password). `prompts` declares those as fields to
+// render; their values are merged into `options` at submit time.
+interface OptionPrompt {
+  key: string
+  label: string
+  placeholder: string
+  defaultValue?: string
+  type?: 'text' | 'password'
+}
+
 interface OperationConfig {
   label: string
   operation: string
   options?: Record<string, string>
   accept: string
   implemented: boolean
+  prompts?: OptionPrompt[]
 }
 
 const operations: OperationConfig[] = [
@@ -31,9 +43,21 @@ const operations: OperationConfig[] = [
   { label: 'JPG → PNG', operation: 'image-convert', options: { format: 'png' }, accept: 'image/jpeg', implemented: true },
   { label: 'PNG → JPG', operation: 'image-convert', options: { format: 'jpeg' }, accept: 'image/png', implemented: true },
   { label: 'Resize Image', operation: 'image-resize', options: { max_width: '1200' }, accept: 'image/*', implemented: true },
+  { label: 'Rotate PDF', operation: 'pdf-rotate', accept: 'application/pdf', implemented: true, prompts: [{ key: 'angle', label: 'Rotation', placeholder: '90', defaultValue: '90' }] },
+  { label: 'Remove Pages', operation: 'pdf-remove-pages', accept: 'application/pdf', implemented: true, prompts: [{ key: 'pages', label: 'Pages to remove', placeholder: 'e.g. 1,3,5-7' }] },
+  { label: 'Extract Pages', operation: 'pdf-extract-pages', accept: 'application/pdf', implemented: true, prompts: [{ key: 'pages', label: 'Pages to keep', placeholder: 'e.g. 1,3,5-7' }] },
+  { label: 'Watermark PDF', operation: 'pdf-watermark', accept: 'application/pdf', implemented: true, prompts: [{ key: 'text', label: 'Watermark text', placeholder: 'CONFIDENTIAL' }] },
+  { label: 'Protect PDF', operation: 'pdf-protect', accept: 'application/pdf', implemented: true, prompts: [{ key: 'password', label: 'Password', placeholder: 'Choose a password', type: 'password' }] },
+  { label: 'Unlock PDF', operation: 'pdf-unlock', accept: 'application/pdf', implemented: true, prompts: [{ key: 'password', label: 'Current password', placeholder: 'Enter the PDF password', type: 'password' }] },
 ]
 
 type Status = 'idle' | 'uploading' | 'converting' | 'done' | 'error'
+
+function initialPromptValues(op: OperationConfig): Record<string, string> {
+  const values: Record<string, string> = {}
+  for (const p of op.prompts ?? []) values[p.key] = p.defaultValue ?? ''
+  return values
+}
 
 export function ConvertPage() {
   const [selectedOp, setSelectedOp] = useState(operations[0])
@@ -41,6 +65,7 @@ export function ConvertPage() {
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState('')
   const [result, setResult] = useState<FileResponse | null>(null)
+  const [promptValues, setPromptValues] = useState<Record<string, string>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function reset() {
@@ -52,6 +77,7 @@ export function ConvertPage() {
 
   function handleSelectOperation(op: OperationConfig) {
     setSelectedOp(op)
+    setPromptValues(initialPromptValues(op))
     reset()
   }
 
@@ -80,7 +106,7 @@ export function ConvertPage() {
         file_id: uploaded.id,
         operation: selectedOp.operation,
         version: 'v1',
-        options: selectedOp.options ?? {},
+        options: { ...(selectedOp.options ?? {}), ...promptValues },
       })
 
       setResult(converted)
@@ -105,6 +131,7 @@ export function ConvertPage() {
   }
 
   const isBusy = status === 'uploading' || status === 'converting'
+  const missingPrompt = (selectedOp.prompts ?? []).some((p) => !promptValues[p.key]?.trim())
 
   return (
     <div>
@@ -133,6 +160,23 @@ export function ConvertPage() {
           ))}
         </div>
       </div>
+
+      {selectedOp.prompts && selectedOp.prompts.length > 0 && (
+        <div className="card">
+          {selectedOp.prompts.map((prompt) => (
+            <div className="field-row" key={prompt.key}>
+              <label htmlFor={`opt-${prompt.key}`}>{prompt.label}</label>
+              <input
+                id={`opt-${prompt.key}`}
+                type={prompt.type === 'password' ? 'password' : 'text'}
+                placeholder={prompt.placeholder}
+                value={promptValues[prompt.key] ?? ''}
+                onChange={(e) => setPromptValues((prev) => ({ ...prev, [prompt.key]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card">
         <div className="dropzone" onClick={() => fileInputRef.current?.click()} style={{ cursor: 'pointer' }}>
@@ -174,7 +218,7 @@ export function ConvertPage() {
           <button
             className="btn-primary"
             type="button"
-            disabled={!file || isBusy || !selectedOp.implemented}
+            disabled={!file || isBusy || !selectedOp.implemented || missingPrompt}
             style={{ width: '100%' }}
             onClick={handleConvert}
           >

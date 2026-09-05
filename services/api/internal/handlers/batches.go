@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -42,6 +44,7 @@ type batchResponse struct {
 	Completed int       `json:"completed"`
 	Failed    int       `json:"failed"`
 	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Create accepts multiple files under the "files" form field plus an
@@ -74,6 +77,14 @@ func (h *BatchesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	options := map[string]string{}
+	if raw := r.FormValue("options"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &options); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid options: must be a JSON object of strings")
+			return
+		}
+	}
+
 	fileHeaders := r.MultipartForm.File["files"]
 	if len(fileHeaders) == 0 {
 		writeError(w, http.StatusBadRequest, "no files provided")
@@ -84,6 +95,7 @@ func (h *BatchesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		ID:        uuid.New(),
 		OwnerID:   claims.UserID,
 		Operation: operation,
+		Options:   options,
 		Total:     len(fileHeaders),
 		Status:    batches.StatusProcessing,
 	}
@@ -92,16 +104,19 @@ func (h *BatchesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	failedSoFar := 0
 	for _, fh := range fileHeaders {
-		if !h.processOneUpload(r, claims.UserID, batch.ID, operation, version, fh) {
+		if !h.processOneUpload(r, claims.UserID, batch.ID, operation, version, options, fh) {
 			_ = h.repo.IncrementFailed(r.Context(), batch.ID)
+			failedSoFar++
 		}
 	}
+	batch.Failed = failedSoFar
 
-	writeJSON(w, http.StatusCreated, batchResponse{ID: batch.ID, Operation: batch.Operation, Total: batch.Total, Status: batch.Status})
+	writeJSON(w, http.StatusCreated, batchResponse{ID: batch.ID, Operation: batch.Operation, Total: batch.Total, Completed: batch.Completed, Failed: batch.Failed, Status: batch.Status, CreatedAt: time.Now()})
 }
 
-func (h *BatchesHandler) processOneUpload(r *http.Request, ownerID, batchID uuid.UUID, operation, version string, fh *multipart.FileHeader) bool {
+func (h *BatchesHandler) processOneUpload(r *http.Request, ownerID, batchID uuid.UUID, operation, version string, options map[string]string, fh *multipart.FileHeader) bool {
 	file, err := fh.Open()
 	if err != nil {
 		return false
@@ -152,6 +167,7 @@ func (h *BatchesHandler) processOneUpload(r *http.Request, ownerID, batchID uuid
 		Operation:   operation,
 		Version:     version,
 		InputFileID: inputFile.ID.String(),
+		Options:     options,
 	})
 	if err != nil {
 		errMsg := "failed to enqueue: " + err.Error()
@@ -185,7 +201,7 @@ func (h *BatchesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, batchResponse{ID: b.ID, Operation: b.Operation, Total: b.Total, Completed: b.Completed, Failed: b.Failed, Status: b.Status})
+	writeJSON(w, http.StatusOK, batchResponse{ID: b.ID, Operation: b.Operation, Total: b.Total, Completed: b.Completed, Failed: b.Failed, Status: b.Status, CreatedAt: b.CreatedAt})
 }
 
 func (h *BatchesHandler) ListItems(w http.ResponseWriter, r *http.Request) {
@@ -258,7 +274,7 @@ func (h *BatchesHandler) RetryFailed(w http.ResponseWriter, r *http.Request) {
 
 	for _, item := range items {
 		_ = h.producer.Enqueue(r.Context(), queue.Message{
-			JobItemID: item.ID.String(), Operation: b.Operation, Version: "v1", InputFileID: item.InputFileID.String(),
+			JobItemID: item.ID.String(), Operation: b.Operation, Version: "v1", InputFileID: item.InputFileID.String(), Options: b.Options,
 		})
 	}
 

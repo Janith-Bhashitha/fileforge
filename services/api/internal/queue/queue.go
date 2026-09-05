@@ -25,17 +25,23 @@ type Message struct {
 // and "image-to-pdf" both belong to the image worker despite one containing
 // "pdf" in its name, so string-prefix matching would get this wrong.
 var StreamForOperation = map[string]string{
-	"image-to-pdf":  "stream:image",
-	"pdf-to-image":  "stream:image",
-	"image-convert": "stream:image",
-	"image-resize":  "stream:image",
-	"docx-to-pdf":   "stream:office",
-	"pptx-to-pdf":   "stream:office",
-	"xlsx-to-pdf":   "stream:office",
-	"txt-to-pdf":    "stream:office",
-	"pdf-merge":     "stream:pdf",
-	"pdf-split":     "stream:pdf",
-	"pdf-compress":  "stream:pdf",
+	"image-to-pdf":      "stream:image",
+	"pdf-to-image":      "stream:image",
+	"image-convert":     "stream:image",
+	"image-resize":      "stream:image",
+	"docx-to-pdf":       "stream:office",
+	"pptx-to-pdf":       "stream:office",
+	"xlsx-to-pdf":       "stream:office",
+	"txt-to-pdf":        "stream:office",
+	"pdf-merge":         "stream:pdf",
+	"pdf-split":         "stream:pdf",
+	"pdf-compress":      "stream:pdf",
+	"pdf-rotate":        "stream:pdf",
+	"pdf-remove-pages":  "stream:pdf",
+	"pdf-extract-pages": "stream:pdf",
+	"pdf-watermark":     "stream:pdf",
+	"pdf-protect":       "stream:pdf",
+	"pdf-unlock":        "stream:pdf",
 }
 
 type Producer struct {
