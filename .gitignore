@@ -13,6 +13,18 @@ services/api/bin/
 .env
 !.env.example
 
+# Terraform
+# .terraform/ holds downloaded provider binaries (~700MB) - never committed.
+# .tfstate records real infrastructure and can contain secrets in plain text.
+# .terraform.lock.hcl is the exception: it pins provider versions and SHOULD
+# be committed, so everyone plans against the same provider build.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
 # OS
 .DS_Store
 Thumbs.db
