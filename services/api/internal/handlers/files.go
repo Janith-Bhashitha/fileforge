@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -96,6 +97,48 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusCreated, fileResponse{ID: f.ID, Filename: f.Filename, MimeType: f.MimeType, Size: f.Size})
 }
+
+type fileListItem struct {
+	ID                uuid.UUID  `json:"id"`
+	Filename          string     `json:"filename"`
+	MimeType          string     `json:"mime_type"`
+	Size              int64      `json:"size"`
+	DerivedFromFileID *uuid.UUID `json:"derived_from_file_id,omitempty"`
+	Operation         *string    `json:"operation,omitempty"`
+	DerivedCount      int        `json:"derived_count"`
+	CreatedAt         time.Time  `json:"created_at"`
+}
+
+func (h *FilesHandler) List(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	items, err := h.repo.ListByOwner(r.Context(), claims.UserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list files")
+		return
+	}
+
+	response := make([]fileListItem, len(items))
+	for i, item := range items {
+		response[i] = fileListItem{
+			ID:                item.ID,
+			Filename:          item.Filename,
+			MimeType:          item.MimeType,
+			Size:              item.Size,
+			DerivedFromFileID: item.DerivedFromFileID,
+			Operation:         item.Operation,
+			DerivedCount:      item.DerivedCount,
+			CreatedAt:         item.CreatedAt,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 
 func (h *FilesHandler) Download(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())

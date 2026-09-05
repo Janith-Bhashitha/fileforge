@@ -51,6 +51,7 @@ func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string, store 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(auth.Middleware(jwtSecret))
 
+		r.Get("/files", filesHandler.List)
 		r.Post("/files", filesHandler.Upload)
 		r.Get("/files/{id}/download", filesHandler.Download)
 		r.Delete("/files/{id}", filesHandler.Delete)

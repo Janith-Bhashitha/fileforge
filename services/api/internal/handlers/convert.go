@@ -129,6 +129,7 @@ func (h *ConvertHandler) Convert(w http.ResponseWriter, r *http.Request) {
 		Checksum:          "",
 		StorageKey:        outputKey,
 		DerivedFromFileID: &inputFiles[0].ID,
+		Operation:         &req.Operation,
 	}
 
 	if err := h.repo.Create(r.Context(), outputFile); err != nil {
