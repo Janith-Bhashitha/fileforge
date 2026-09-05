@@ -10,18 +10,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/auth"
-	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert"
-	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/imageops"
-	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/office"
-	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/pdfops"
-	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/txtops"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convertsetup"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/files"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/handlers"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/jobs"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/queue"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/users"
 )
 
-func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string, store storage.Store) http.Handler {
+func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string, store storage.Store, producer *queue.Producer) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(requestLogger(logger))
@@ -34,9 +32,14 @@ func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string, store 
 	userService := users.NewService(userRepo)
 	authHandler := handlers.NewAuthHandler(userService, jwtSecret)
 
+	registry := convertsetup.BuildRegistry()
+
 	fileRepo := files.NewRepository(pool)
 	filesHandler := handlers.NewFilesHandler(fileRepo, store)
-	convertHandler := handlers.NewConvertHandler(fileRepo, store, buildRegistry())
+	convertHandler := handlers.NewConvertHandler(fileRepo, store, registry)
+
+	jobsRepo := jobs.NewRepository(pool)
+	jobsHandler := handlers.NewJobsHandler(jobsRepo, fileRepo, registry, producer)
 
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Post("/register", authHandler.Register)
@@ -57,28 +60,15 @@ func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string, store 
 		r.Delete("/files/{id}", filesHandler.Delete)
 
 		r.Post("/convert", convertHandler.Convert)
+
+		r.Post("/jobs", jobsHandler.Create)
+		r.Get("/jobs/{id}", jobsHandler.Get)
+		r.Get("/jobs/{id}/items", jobsHandler.ListItems)
+		r.Post("/jobs/{id}/cancel", jobsHandler.Cancel)
+		r.Post("/jobs/{id}/retry", jobsHandler.Retry)
 	})
 
 	return r
-}
-
-// buildRegistry registers every Phase 2 operation under its "name:version"
-// key. New operations (Phase 7+ AI-backed ones included) register here too,
-// reusing the same Processor interface.
-func buildRegistry() *convert.Registry {
-	reg := convert.NewRegistry()
-	reg.Register("image-to-pdf", "v1", imageops.ImageToPDFProcessor{})
-	reg.Register("pdf-to-image", "v1", imageops.PDFToImageProcessor{})
-	reg.Register("image-convert", "v1", imageops.ImageConvertProcessor{})
-	reg.Register("image-resize", "v1", imageops.ImageResizeProcessor{})
-	reg.Register("docx-to-pdf", "v1", office.OfficeToPDFProcessor{})
-	reg.Register("pptx-to-pdf", "v1", office.OfficeToPDFProcessor{})
-	reg.Register("xlsx-to-pdf", "v1", office.OfficeToPDFProcessor{})
-	reg.Register("txt-to-pdf", "v1", txtops.TxtToPDFProcessor{})
-	reg.Register("pdf-merge", "v1", pdfops.MergeProcessor{})
-	reg.Register("pdf-split", "v1", pdfops.SplitProcessor{})
-	reg.Register("pdf-compress", "v1", pdfops.CompressProcessor{})
-	return reg
 }
 
 func corsMiddleware(next http.Handler) http.Handler {

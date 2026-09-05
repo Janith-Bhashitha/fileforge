@@ -118,7 +118,7 @@ func (h *ConvertHandler) Convert(w http.ResponseWriter, r *http.Request) {
 
 	// Display name is derived from the original upload, never from the
 	// processor's internal (often UUID-based) output path.
-	displayName := displayFilename(inputFiles[0].Filename, req.Operation, filepath.Ext(result.OutputPath))
+	displayName := convert.DisplayFilename(inputFiles[0].Filename, req.Operation, filepath.Ext(result.OutputPath))
 
 	outputFile := &files.File{
 		ID:                uuid.New(),
@@ -143,11 +143,4 @@ func (h *ConvertHandler) Convert(w http.ResponseWriter, r *http.Request) {
 		MimeType: outputFile.MimeType,
 		Size:     outputFile.Size,
 	})
-}
-
-// displayFilename builds a human-readable output name from the original
-// upload, e.g. "report.docx" + "docx-to-pdf" + ".pdf" -> "report-docx-to-pdf.pdf".
-func displayFilename(originalName, operation, ext string) string {
-	base := strings.TrimSuffix(originalName, filepath.Ext(originalName))
-	return base + "-" + operation + ext
 }

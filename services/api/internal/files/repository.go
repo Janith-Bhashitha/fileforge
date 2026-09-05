@@ -37,6 +37,18 @@ func (r *Repository) GetByID(ctx context.Context, id, ownerID uuid.UUID) (*File,
 	return scanFile(row)
 }
 
+// GetByIDAny looks up a file with no owner check — for worker code, which
+// acts on behalf of the system rather than a specific authenticated
+// request. Every HTTP-facing path must keep using GetByID instead.
+func (r *Repository) GetByIDAny(ctx context.Context, id uuid.UUID) (*File, error) {
+	row := r.pool.QueryRow(ctx,
+		`SELECT id, owner_id, filename, mime_type, size, checksum, storage_key, derived_from_file_id, operation, created_at
+		 FROM files WHERE id = $1`,
+		id,
+	)
+	return scanFile(row)
+}
+
 // ListByOwner returns every file the user owns (uploads and conversion
 // outputs alike), newest first, each annotated with how many other files
 // were derived from it.

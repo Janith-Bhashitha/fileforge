@@ -8,6 +8,7 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/db"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/httpserver"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/logging"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/queue"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 )
 
@@ -34,7 +35,13 @@ func main() {
 		return
 	}
 
-	router := httpserver.NewRouter(logger, pool, cfg.JWTSecret, store)
+	producer, err := queue.NewProducer(cfg.RedisURL)
+	if err != nil {
+		logger.Error("failed to init queue producer", "error", err)
+		return
+	}
+
+	router := httpserver.NewRouter(logger, pool, cfg.JWTSecret, store, producer)
 
 	logger.Info("starting server", "port", cfg.APIPort, "storage_dir", cfg.StorageDir)
 	if err := http.ListenAndServe(":"+cfg.APIPort, router); err != nil {

@@ -10,6 +10,7 @@ type Config struct {
 	DatabaseURL string
 	JWTSecret   string
 	StorageDir  string
+	RedisURL    string
 }
 
 func Load() (*Config, error) {
@@ -23,11 +24,17 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("JWT_SECRET is required")
 	}
 
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		return nil, fmt.Errorf("REDIS_URL is required")
+	}
+
 	return &Config{
 		APIPort:     getEnv("API_PORT", "8080"),
 		DatabaseURL: dbURL,
 		JWTSecret:   jwtSecret,
 		StorageDir:  getEnv("STORAGE_DIR", "./storage"),
+		RedisURL:    redisURL,
 	}, nil
 }
 
