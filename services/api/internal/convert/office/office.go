@@ -11,12 +11,15 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert"
 )
 
-// DocxToPDFProcessor shells out to LibreOffice headless, the same pattern
+// OfficeToPDFProcessor shells out to LibreOffice headless, the same pattern
 // the master plan uses for anything without a mature native Go equivalent —
-// no maintained pure-Go DOCX-to-PDF renderer exists.
-type DocxToPDFProcessor struct{}
+// no maintained pure-Go Office-to-PDF renderer exists. LibreOffice
+// auto-detects the input format, so this single processor handles DOCX,
+// PPTX, and XLSX alike (Writer, Impress, and Calc are all installed in the
+// image) rather than needing one implementation per format.
+type OfficeToPDFProcessor struct{}
 
-func (DocxToPDFProcessor) Process(ctx context.Context, req convert.ConversionRequest) (convert.ConversionResult, error) {
+func (OfficeToPDFProcessor) Process(ctx context.Context, req convert.ConversionRequest) (convert.ConversionResult, error) {
 	dir := filepath.Dir(req.InputPath)
 	outDir, err := os.MkdirTemp(dir, "office-*")
 	if err != nil {
@@ -52,7 +55,7 @@ func (DocxToPDFProcessor) Process(ctx context.Context, req convert.ConversionReq
 		return convert.ConversionResult{}, fmt.Errorf("libreoffice did not produce expected output: %w", err)
 	}
 
-	outPath := filepath.Join(dir, "docx-to-pdf-"+base+".pdf")
+	outPath := filepath.Join(dir, "office-to-pdf-"+base+".pdf")
 	if err := os.Rename(producedPath, outPath); err != nil {
 		return convert.ConversionResult{}, fmt.Errorf("move converted file: %w", err)
 	}

@@ -42,8 +42,39 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>
 }
 
+async function upload<T>(path: string, formData: FormData): Promise<T> {
+  const token = getToken()
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData,
+  })
+
+  if (!res.ok) {
+    const body: ApiErrorBody = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, body.error ?? 'Upload failed')
+  }
+
+  return res.json() as Promise<T>
+}
+
+async function downloadBlob(path: string): Promise<Blob> {
+  const token = getToken()
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+
+  if (!res.ok) {
+    throw new ApiError(res.status, 'Download failed')
+  }
+
+  return res.blob()
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
   post: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  upload,
+  downloadBlob,
 }

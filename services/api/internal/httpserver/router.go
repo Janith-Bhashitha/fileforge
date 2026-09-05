@@ -14,6 +14,7 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/imageops"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/office"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/pdfops"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/txtops"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/files"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/handlers"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
@@ -67,7 +68,10 @@ func buildRegistry() *convert.Registry {
 	reg := convert.NewRegistry()
 	reg.Register("image-to-pdf", "v1", imageops.ImageToPDFProcessor{})
 	reg.Register("pdf-to-image", "v1", imageops.PDFToImageProcessor{})
-	reg.Register("docx-to-pdf", "v1", office.DocxToPDFProcessor{})
+	reg.Register("docx-to-pdf", "v1", office.OfficeToPDFProcessor{})
+	reg.Register("pptx-to-pdf", "v1", office.OfficeToPDFProcessor{})
+	reg.Register("xlsx-to-pdf", "v1", office.OfficeToPDFProcessor{})
+	reg.Register("txt-to-pdf", "v1", txtops.TxtToPDFProcessor{})
 	reg.Register("pdf-merge", "v1", pdfops.MergeProcessor{})
 	reg.Register("pdf-split", "v1", pdfops.SplitProcessor{})
 	reg.Register("pdf-compress", "v1", pdfops.CompressProcessor{})

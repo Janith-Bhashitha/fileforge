@@ -12,7 +12,9 @@ var allowedMimeTypes = map[string]bool{
 	"image/jpeg":      true,
 	"image/png":       true,
 	"application/pdf": true,
-	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document":   true,
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation": true,
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":         true,
 	"text/plain": true,
 }
 
