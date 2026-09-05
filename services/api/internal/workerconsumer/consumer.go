@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/batches"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/files"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/jobs"
@@ -27,16 +28,17 @@ import (
 )
 
 type Runner struct {
-	Logger    *slog.Logger
-	Redis     *redis.Client
-	Producer  *queue.Producer
-	Stream    string
-	Group     string
-	Consumer  string
-	Registry  *convert.Registry
-	JobsRepo  *jobs.Repository
-	FilesRepo *files.Repository
-	Store     storage.Store
+	Logger      *slog.Logger
+	Redis       *redis.Client
+	Producer    *queue.Producer
+	Stream      string
+	Group       string
+	Consumer    string
+	Registry    *convert.Registry
+	JobsRepo    *jobs.Repository
+	BatchesRepo *batches.Repository
+	FilesRepo   *files.Repository
+	Store       storage.Store
 }
 
 // Run blocks forever, consuming messages from r.Stream until ctx is
@@ -122,11 +124,16 @@ func (r *Runner) handleMessage(ctx context.Context, msg redis.XMessage) {
 		return
 	}
 
-	logger := r.Logger.With("job_id", item.JobID, "job_item_id", item.ID, "operation", qmsg.Operation, "worker", r.Consumer)
+	logger := r.Logger.With("job_item_id", item.ID, "operation", qmsg.Operation, "worker", r.Consumer)
+	if item.JobID != nil {
+		logger = logger.With("job_id", *item.JobID)
+	}
+	if item.BatchID != nil {
+		logger = logger.With("batch_id", *item.BatchID)
+	}
 
 	_ = r.JobsRepo.UpdateItem(ctx, item.ID, jobs.StatusProcessing, nil, nil, false)
-	nilErr := (*string)(nil)
-	_ = r.JobsRepo.UpdateJobStatus(ctx, item.JobID, jobs.StatusProcessing, nilErr)
+	r.markParentProcessing(ctx, item)
 
 	inputFileID, err := uuid.Parse(qmsg.InputFileID)
 	if err != nil {
@@ -181,8 +188,7 @@ func (r *Runner) handleMessage(ctx context.Context, msg redis.XMessage) {
 	}
 
 	_ = r.JobsRepo.UpdateItem(ctx, item.ID, jobs.StatusCompleted, &outputFile.ID, nil, false)
-	_ = r.JobsRepo.UpdateJobStatus(ctx, item.JobID, jobs.StatusCompleted, nilErr)
-	_ = r.JobsRepo.UpdateJobProgress(ctx, item.JobID, 100)
+	r.markParentCompleted(ctx, item)
 
 	logger.Info("job item completed", "output_file_id", outputFile.ID)
 }
@@ -215,5 +221,37 @@ func (r *Runner) retryOrFail(ctx context.Context, item *jobs.JobItem, qmsg queue
 func (r *Runner) failItem(ctx context.Context, item *jobs.JobItem, errMsg string, logger *slog.Logger) {
 	logger.Error("job item failed permanently", "error", errMsg)
 	_ = r.JobsRepo.UpdateItem(ctx, item.ID, jobs.StatusFailed, nil, &errMsg, true)
-	_ = r.JobsRepo.UpdateJobStatus(ctx, item.JobID, jobs.StatusFailed, &errMsg)
+	r.markParentFailed(ctx, item, errMsg)
+}
+
+// markParentProcessing/Completed/Failed are the only places that branch on
+// whether an item belongs to a single Job (Phase 3) or a Batch (Phase 4) -
+// everything above this point treats a JobItem identically either way.
+func (r *Runner) markParentProcessing(ctx context.Context, item *jobs.JobItem) {
+	if item.JobID != nil {
+		_ = r.JobsRepo.UpdateJobStatus(ctx, *item.JobID, jobs.StatusProcessing, nil)
+	}
+	// Batches don't track a parent-level "processing" transition - their
+	// status only ever recomputes when an item finishes.
+}
+
+func (r *Runner) markParentCompleted(ctx context.Context, item *jobs.JobItem) {
+	if item.JobID != nil {
+		_ = r.JobsRepo.UpdateJobStatus(ctx, *item.JobID, jobs.StatusCompleted, nil)
+		_ = r.JobsRepo.UpdateJobProgress(ctx, *item.JobID, 100)
+		return
+	}
+	if item.BatchID != nil {
+		_ = r.BatchesRepo.IncrementCompleted(ctx, *item.BatchID)
+	}
+}
+
+func (r *Runner) markParentFailed(ctx context.Context, item *jobs.JobItem, errMsg string) {
+	if item.JobID != nil {
+		_ = r.JobsRepo.UpdateJobStatus(ctx, *item.JobID, jobs.StatusFailed, &errMsg)
+		return
+	}
+	if item.BatchID != nil {
+		_ = r.BatchesRepo.IncrementFailed(ctx, *item.BatchID)
+	}
 }

@@ -35,14 +35,18 @@ type Job struct {
 	UpdatedAt time.Time
 }
 
+// JobItem belongs to exactly one of Job (Phase 3, JobID set) or Batch
+// (Phase 4, BatchID set) - a database check constraint enforces this isn't
+// ever both or neither.
 type JobItem struct {
-	ID            uuid.UUID
-	JobID         uuid.UUID
-	InputFileID   uuid.UUID
-	OutputFileID  *uuid.UUID
-	Status        string
-	Attempts      int
-	LastError     *string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID           uuid.UUID
+	JobID        *uuid.UUID
+	BatchID      *uuid.UUID
+	InputFileID  uuid.UUID
+	OutputFileID *uuid.UUID
+	Status       string
+	Attempts     int
+	LastError    *string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }

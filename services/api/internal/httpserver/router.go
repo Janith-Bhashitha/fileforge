@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/auth"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/batches"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convertsetup"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/files"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/handlers"
@@ -41,6 +42,9 @@ func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string, store 
 	jobsRepo := jobs.NewRepository(pool)
 	jobsHandler := handlers.NewJobsHandler(jobsRepo, fileRepo, registry, producer)
 
+	batchesRepo := batches.NewRepository(pool)
+	batchesHandler := handlers.NewBatchesHandler(batchesRepo, jobsRepo, fileRepo, store, registry, producer)
+
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
@@ -66,6 +70,12 @@ func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string, store 
 		r.Get("/jobs/{id}/items", jobsHandler.ListItems)
 		r.Post("/jobs/{id}/cancel", jobsHandler.Cancel)
 		r.Post("/jobs/{id}/retry", jobsHandler.Retry)
+
+		r.Post("/batches", batchesHandler.Create)
+		r.Get("/batches/{id}", batchesHandler.Get)
+		r.Get("/batches/{id}/items", batchesHandler.ListItems)
+		r.Post("/batches/{id}/retry-failed", batchesHandler.RetryFailed)
+		r.Get("/batches/{id}/download", batchesHandler.Download)
 	})
 
 	return r

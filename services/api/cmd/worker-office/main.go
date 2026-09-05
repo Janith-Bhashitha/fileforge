@@ -6,6 +6,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/batches"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/config"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convertsetup"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/db"
@@ -57,16 +58,17 @@ func main() {
 	hostname, _ := os.Hostname()
 
 	runner := &workerconsumer.Runner{
-		Logger:    logger,
-		Redis:     redis.NewClient(redisOpts),
-		Producer:  producer,
-		Stream:    "stream:office",
-		Group:     "cg:worker-office",
-		Consumer:  hostname,
-		Registry:  convertsetup.BuildRegistry(),
-		JobsRepo:  jobs.NewRepository(pool),
-		FilesRepo: files.NewRepository(pool),
-		Store:     store,
+		Logger:      logger,
+		Redis:       redis.NewClient(redisOpts),
+		Producer:    producer,
+		Stream:      "stream:office",
+		Group:       "cg:worker-office",
+		Consumer:    hostname,
+		Registry:    convertsetup.BuildRegistry(),
+		JobsRepo:    jobs.NewRepository(pool),
+		BatchesRepo: batches.NewRepository(pool),
+		FilesRepo:   files.NewRepository(pool),
+		Store:       store,
 	}
 
 	go workerhealth.Serve(logger, ":8080")

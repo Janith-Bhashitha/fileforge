@@ -48,6 +48,17 @@ func (r *Repository) CreateWithItem(ctx context.Context, job *Job, item *JobItem
 	return tx.Commit(ctx)
 }
 
+// CreateItemForBatch inserts a single job_item belonging to a batch
+// (batch_id set, job_id left null) — the batch row itself is created
+// separately by the batches package, which owns that table.
+func (r *Repository) CreateItemForBatch(ctx context.Context, item *JobItem) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO job_items (id, batch_id, input_file_id, status) VALUES ($1,$2,$3,$4)`,
+		item.ID, item.BatchID, item.InputFileID, item.Status,
+	)
+	return err
+}
+
 func (r *Repository) GetJob(ctx context.Context, id, ownerID uuid.UUID) (*Job, error) {
 	row := r.pool.QueryRow(ctx,
 		`SELECT id, owner_id, operation, status, progress, error, created_at, updated_at
@@ -61,7 +72,7 @@ func (r *Repository) ListItemsByJob(ctx context.Context, jobID, ownerID uuid.UUI
 	// Join back to jobs to enforce ownership in one query rather than a
 	// separate existence check first.
 	rows, err := r.pool.Query(ctx,
-		`SELECT ji.id, ji.job_id, ji.input_file_id, ji.output_file_id, ji.status, ji.attempts, ji.last_error, ji.created_at, ji.updated_at
+		`SELECT ji.id, ji.job_id, ji.batch_id, ji.input_file_id, ji.output_file_id, ji.status, ji.attempts, ji.last_error, ji.created_at, ji.updated_at
 		 FROM job_items ji
 		 JOIN jobs j ON j.id = ji.job_id
 		 WHERE ji.job_id = $1 AND j.owner_id = $2
@@ -72,28 +83,36 @@ func (r *Repository) ListItemsByJob(ctx context.Context, jobID, ownerID uuid.UUI
 		return nil, err
 	}
 	defer rows.Close()
+	return scanItems(rows)
+}
 
-	var items []JobItem
-	for rows.Next() {
-		var item JobItem
-		if err := rows.Scan(&item.ID, &item.JobID, &item.InputFileID, &item.OutputFileID, &item.Status, &item.Attempts, &item.LastError, &item.CreatedAt, &item.UpdatedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, item)
+// ListItemsByBatch mirrors ListItemsByJob for the batch case.
+func (r *Repository) ListItemsByBatch(ctx context.Context, batchID, ownerID uuid.UUID) ([]JobItem, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT ji.id, ji.job_id, ji.batch_id, ji.input_file_id, ji.output_file_id, ji.status, ji.attempts, ji.last_error, ji.created_at, ji.updated_at
+		 FROM job_items ji
+		 JOIN batches b ON b.id = ji.batch_id
+		 WHERE ji.batch_id = $1 AND b.owner_id = $2
+		 ORDER BY ji.created_at`,
+		batchID, ownerID,
+	)
+	if err != nil {
+		return nil, err
 	}
-	return items, rows.Err()
+	defer rows.Close()
+	return scanItems(rows)
 }
 
 // GetItemByID has no owner check — this is used by workers, which act on
 // behalf of the system, not a specific authenticated request.
 func (r *Repository) GetItemByID(ctx context.Context, id uuid.UUID) (*JobItem, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT id, job_id, input_file_id, output_file_id, status, attempts, last_error, created_at, updated_at
+		`SELECT id, job_id, batch_id, input_file_id, output_file_id, status, attempts, last_error, created_at, updated_at
 		 FROM job_items WHERE id = $1`,
 		id,
 	)
 	var item JobItem
-	err := row.Scan(&item.ID, &item.JobID, &item.InputFileID, &item.OutputFileID, &item.Status, &item.Attempts, &item.LastError, &item.CreatedAt, &item.UpdatedAt)
+	err := row.Scan(&item.ID, &item.JobID, &item.BatchID, &item.InputFileID, &item.OutputFileID, &item.Status, &item.Attempts, &item.LastError, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -122,7 +141,7 @@ func (r *Repository) UpdateJobProgress(ctx context.Context, id uuid.UUID, progre
 // UpdateItem is the one place worker code writes item outcomes — a single
 // call covers "processing started", "completed with an output file",
 // "failed with an attempt increment", etc., depending on which pointers are
-// non-nil.
+// non-nil. Works identically whether the item belongs to a Job or a Batch.
 func (r *Repository) UpdateItem(ctx context.Context, id uuid.UUID, status string, outputFileID *uuid.UUID, lastError *string, incrementAttempts bool) error {
 	if incrementAttempts {
 		_, err := r.pool.Exec(ctx,
@@ -169,23 +188,15 @@ func (r *Repository) ResetFailedItemsForRetry(ctx context.Context, jobID, ownerI
 		`UPDATE job_items SET status = $1, updated_at = now()
 		 WHERE job_id = $2 AND status = $3
 		   AND job_id IN (SELECT id FROM jobs WHERE id = $2 AND owner_id = $4)
-		 RETURNING id, job_id, input_file_id, output_file_id, status, attempts, last_error, created_at, updated_at`,
+		 RETURNING id, job_id, batch_id, input_file_id, output_file_id, status, attempts, last_error, created_at, updated_at`,
 		StatusQueued, jobID, StatusFailed, ownerID,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	var items []JobItem
-	for rows.Next() {
-		var item JobItem
-		if err := rows.Scan(&item.ID, &item.JobID, &item.InputFileID, &item.OutputFileID, &item.Status, &item.Attempts, &item.LastError, &item.CreatedAt, &item.UpdatedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
+	items, err := scanItems(rows)
+	if err != nil {
 		return nil, err
 	}
 
@@ -196,6 +207,36 @@ func (r *Repository) ResetFailedItemsForRetry(ctx context.Context, jobID, ownerI
 	}
 
 	return items, nil
+}
+
+// ResetFailedItemsForBatch mirrors ResetFailedItemsForRetry for the batch
+// case — flips failed items back to queued so the caller can re-enqueue
+// them, scoped to a batch the owner actually owns.
+func (r *Repository) ResetFailedItemsForBatch(ctx context.Context, batchID, ownerID uuid.UUID) ([]JobItem, error) {
+	rows, err := r.pool.Query(ctx,
+		`UPDATE job_items SET status = $1, updated_at = now()
+		 WHERE batch_id = $2 AND status = $3
+		   AND batch_id IN (SELECT id FROM batches WHERE id = $2 AND owner_id = $4)
+		 RETURNING id, job_id, batch_id, input_file_id, output_file_id, status, attempts, last_error, created_at, updated_at`,
+		StatusQueued, batchID, StatusFailed, ownerID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanItems(rows)
+}
+
+func scanItems(rows pgx.Rows) ([]JobItem, error) {
+	var items []JobItem
+	for rows.Next() {
+		var item JobItem
+		if err := rows.Scan(&item.ID, &item.JobID, &item.BatchID, &item.InputFileID, &item.OutputFileID, &item.Status, &item.Attempts, &item.LastError, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func scanJob(row pgx.Row) (*Job, error) {
