@@ -28,6 +28,9 @@ const operations: OperationConfig[] = [
   { label: 'PPTX → PDF', operation: 'pptx-to-pdf', accept: '.pptx', implemented: true },
   { label: 'XLSX → PDF', operation: 'xlsx-to-pdf', accept: '.xlsx', implemented: true },
   { label: 'TXT → PDF', operation: 'txt-to-pdf', accept: '.txt', implemented: true },
+  { label: 'JPG → PNG', operation: 'image-convert', options: { format: 'png' }, accept: 'image/jpeg', implemented: true },
+  { label: 'PNG → JPG', operation: 'image-convert', options: { format: 'jpeg' }, accept: 'image/png', implemented: true },
+  { label: 'Resize Image', operation: 'image-resize', options: { max_width: '1200' }, accept: 'image/*', implemented: true },
 ]
 
 type Status = 'idle' | 'uploading' | 'converting' | 'done' | 'error'

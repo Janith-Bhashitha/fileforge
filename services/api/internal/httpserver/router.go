@@ -68,6 +68,8 @@ func buildRegistry() *convert.Registry {
 	reg := convert.NewRegistry()
 	reg.Register("image-to-pdf", "v1", imageops.ImageToPDFProcessor{})
 	reg.Register("pdf-to-image", "v1", imageops.PDFToImageProcessor{})
+	reg.Register("image-convert", "v1", imageops.ImageConvertProcessor{})
+	reg.Register("image-resize", "v1", imageops.ImageResizeProcessor{})
 	reg.Register("docx-to-pdf", "v1", office.OfficeToPDFProcessor{})
 	reg.Register("pptx-to-pdf", "v1", office.OfficeToPDFProcessor{})
 	reg.Register("xlsx-to-pdf", "v1", office.OfficeToPDFProcessor{})
