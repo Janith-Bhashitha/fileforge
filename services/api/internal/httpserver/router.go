@@ -10,11 +10,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/auth"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/imageops"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/office"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/pdfops"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/files"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/handlers"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/users"
 )
 
-func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string) http.Handler {
+func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string, store storage.Store) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(requestLogger(logger))
@@ -27,6 +33,10 @@ func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string) http.H
 	userService := users.NewService(userRepo)
 	authHandler := handlers.NewAuthHandler(userService, jwtSecret)
 
+	fileRepo := files.NewRepository(pool)
+	filesHandler := handlers.NewFilesHandler(fileRepo, store)
+	convertHandler := handlers.NewConvertHandler(fileRepo, store, buildRegistry())
+
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
@@ -37,7 +47,31 @@ func NewRouter(logger *slog.Logger, pool *pgxpool.Pool, jwtSecret string) http.H
 		})
 	})
 
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(auth.Middleware(jwtSecret))
+
+		r.Post("/files", filesHandler.Upload)
+		r.Get("/files/{id}/download", filesHandler.Download)
+		r.Delete("/files/{id}", filesHandler.Delete)
+
+		r.Post("/convert", convertHandler.Convert)
+	})
+
 	return r
+}
+
+// buildRegistry registers every Phase 2 operation under its "name:version"
+// key. New operations (Phase 7+ AI-backed ones included) register here too,
+// reusing the same Processor interface.
+func buildRegistry() *convert.Registry {
+	reg := convert.NewRegistry()
+	reg.Register("image-to-pdf", "v1", imageops.ImageToPDFProcessor{})
+	reg.Register("pdf-to-image", "v1", imageops.PDFToImageProcessor{})
+	reg.Register("docx-to-pdf", "v1", office.DocxToPDFProcessor{})
+	reg.Register("pdf-merge", "v1", pdfops.MergeProcessor{})
+	reg.Register("pdf-split", "v1", pdfops.SplitProcessor{})
+	reg.Register("pdf-compress", "v1", pdfops.CompressProcessor{})
+	return reg
 }
 
 func corsMiddleware(next http.Handler) http.Handler {

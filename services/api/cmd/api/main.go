@@ -8,6 +8,7 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/db"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/httpserver"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/logging"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 )
 
 func main() {
@@ -27,9 +28,15 @@ func main() {
 	}
 	defer pool.Close()
 
-	router := httpserver.NewRouter(logger, pool, cfg.JWTSecret)
+	store, err := storage.NewLocalStore(cfg.StorageDir)
+	if err != nil {
+		logger.Error("failed to init storage", "error", err)
+		return
+	}
 
-	logger.Info("starting server", "port", cfg.APIPort)
+	router := httpserver.NewRouter(logger, pool, cfg.JWTSecret, store)
+
+	logger.Info("starting server", "port", cfg.APIPort, "storage_dir", cfg.StorageDir)
 	if err := http.ListenAndServe(":"+cfg.APIPort, router); err != nil {
 		logger.Error("server error", "error", err)
 	}

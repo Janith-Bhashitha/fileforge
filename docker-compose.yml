@@ -36,9 +36,12 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
     ports:
       - "8080:8080"
+    volumes:
+      - api_storage:/data/storage
     depends_on:
       postgres:
         condition: service_healthy
 
 volumes:
   pgdata:
+  api_storage:

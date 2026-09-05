@@ -9,6 +9,7 @@ type Config struct {
 	APIPort     string
 	DatabaseURL string
 	JWTSecret   string
+	StorageDir  string
 }
 
 func Load() (*Config, error) {
@@ -26,6 +27,7 @@ func Load() (*Config, error) {
 		APIPort:     getEnv("API_PORT", "8080"),
 		DatabaseURL: dbURL,
 		JWTSecret:   jwtSecret,
+		StorageDir:  getEnv("STORAGE_DIR", "./storage"),
 	}, nil
 }
 
