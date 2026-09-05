@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Go build, vet & test
+    runs-on: ubuntu-latest
+    services:
+      # MinIO stands in for S3 so the storage integration tests run for real
+      # in CI, with no AWS account and no mocks.
+      minio:
+        image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache-dependency-path: services/api/go.sum
+
+      - name: Create the test bucket
+        run: |
+          curl -sSL https://dl.min.io/client/mc/release/linux-amd64/mc -o mc
+          chmod +x mc
+          ./mc alias set local http://localhost:9000 minioadmin minioadmin
+          ./mc mb --ignore-existing local/fileforge
+
+      - name: gofmt
+        working-directory: services/api
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Build
+        working-directory: services/api
+        run: go build ./...
+
+      - name: Vet
+        working-directory: services/api
+        run: go vet ./...
+
+      - name: Test
+        working-directory: services/api
+        env:
+          S3_TEST_ENDPOINT: http://localhost:9000
+          S3_TEST_BUCKET: fileforge
+          S3_TEST_ACCESS_KEY: minioadmin
+          S3_TEST_SECRET_KEY: minioadmin
+        run: go test ./... -v
+
+  frontend:
+    name: Web typecheck & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: apps/web
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: apps/web
+        run: npm run build
+
+  images:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    needs: [backend]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Building all four images catches a Dockerfile that drifted from the
+      # code (a missing OS package, a renamed binary) which `go build` can't.
+      - name: Build service images
+        run: |
+          docker build -f infrastructure/docker/api/Dockerfile -t fileforge-api .
+          docker build -f infrastructure/docker/worker-pdf/Dockerfile -t fileforge-worker-pdf .
+          docker build -f infrastructure/docker/worker-image/Dockerfile -t fileforge-worker-image .
+          docker build -f infrastructure/docker/worker-office/Dockerfile -t fileforge-worker-office .

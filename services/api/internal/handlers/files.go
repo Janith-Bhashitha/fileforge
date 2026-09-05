@@ -172,7 +172,14 @@ func (h *FilesHandler) Download(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", f.MimeType)
 	w.Header().Set("Content-Disposition", `attachment; filename="`+f.Filename+`"`)
-	http.ServeFile(w, r, h.store.LocalPath(f.StorageKey))
+	localPath, release, err := h.store.Fetch(r.Context(), f.StorageKey)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch file")
+		return
+	}
+	defer release()
+
+	http.ServeFile(w, r, localPath)
 }
 
 func (h *FilesHandler) Delete(w http.ResponseWriter, r *http.Request) {

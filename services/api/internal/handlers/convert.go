@@ -83,8 +83,15 @@ func (h *ConvertHandler) Convert(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to fetch file")
 			return
 		}
+		localPath, release, fetchErr := h.store.Fetch(r.Context(), f.StorageKey)
+		if fetchErr != nil {
+			writeError(w, http.StatusInternalServerError, "failed to fetch file")
+			return
+		}
+		defer release()
+
 		inputFiles = append(inputFiles, f)
-		inputPaths = append(inputPaths, h.store.LocalPath(f.StorageKey))
+		inputPaths = append(inputPaths, localPath)
 	}
 
 	processor, err := h.registry.Resolve(req.Operation, req.Version)
@@ -114,14 +121,15 @@ func (h *ConvertHandler) Convert(w http.ResponseWriter, r *http.Request) {
 	}
 	metrics.ConversionsTotal.WithLabelValues(req.Operation, "success").Inc()
 
-	// Processors write their output directly into the storage base dir
-	// (same dir as the input), so the produced filename doubles as its
-	// storage key — no extra copy step needed.
-	outputKey := filepath.Base(result.OutputPath)
-
 	var size int64
 	if info, statErr := os.Stat(result.OutputPath); statErr == nil {
 		size = info.Size()
+	}
+
+	outputKey, err := h.store.SaveFile(r.Context(), result.OutputPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to store output file")
+		return
 	}
 
 	// Display name is derived from the original upload, never from the

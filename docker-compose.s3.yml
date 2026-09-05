@@ -1,0 +1,53 @@
+# Runs the whole stack against MinIO instead of local disk, exercising the
+# exact S3 code path the AWS deployment uses.
+#
+#   docker compose --profile s3 up -d minio
+#   docker compose -f docker-compose.yml -f docker-compose.s3.yml up -d
+#
+# Point the same variables at a real bucket (dropping S3_ENDPOINT and
+# S3_FORCE_PATH_STYLE, and letting the task role supply credentials) and
+# nothing else about the deployment changes.
+services:
+  api:
+    environment:
+      STORAGE_BACKEND: s3
+      S3_BUCKET: fileforge
+      S3_REGION: us-east-1
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      S3_FORCE_PATH_STYLE: "true"
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+
+  worker-pdf:
+    environment:
+      STORAGE_BACKEND: s3
+      S3_BUCKET: fileforge
+      S3_REGION: us-east-1
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      S3_FORCE_PATH_STYLE: "true"
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+
+  worker-image:
+    environment:
+      STORAGE_BACKEND: s3
+      S3_BUCKET: fileforge
+      S3_REGION: us-east-1
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      S3_FORCE_PATH_STYLE: "true"
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+
+  worker-office:
+    environment:
+      STORAGE_BACKEND: s3
+      S3_BUCKET: fileforge
+      S3_REGION: us-east-1
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      S3_FORCE_PATH_STYLE: "true"
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin

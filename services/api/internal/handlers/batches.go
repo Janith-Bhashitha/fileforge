@@ -346,13 +346,19 @@ func (h *BatchesHandler) Download(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		src, err := os.Open(h.store.LocalPath(outFile.StorageKey))
+		localPath, release, err := h.store.Fetch(r.Context(), outFile.StorageKey)
 		if err != nil {
+			continue
+		}
+		src, err := os.Open(localPath)
+		if err != nil {
+			release()
 			continue
 		}
 		if zf, err := zw.Create(outFile.Filename); err == nil {
 			_, _ = io.Copy(zf, src)
 		}
 		src.Close()
+		release()
 	}
 }

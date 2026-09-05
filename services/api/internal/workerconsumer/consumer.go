@@ -156,9 +156,16 @@ func (r *Runner) handleMessage(ctx context.Context, msg redis.XMessage) {
 		return
 	}
 
+	inputPath, releaseInput, err := r.Store.Fetch(ctx, inputFile.StorageKey)
+	if err != nil {
+		r.failItem(ctx, item, "failed to fetch input file: "+err.Error(), logger)
+		return
+	}
+	defer releaseInput()
+
 	started := time.Now()
 	result, err := processor.Process(ctx, convert.ConversionRequest{
-		InputPath: r.Store.LocalPath(inputFile.StorageKey),
+		InputPath: inputPath,
 		Options:   qmsg.Options,
 	})
 	metrics.ConversionDuration.WithLabelValues(qmsg.Operation).Observe(time.Since(started).Seconds())
@@ -169,10 +176,15 @@ func (r *Runner) handleMessage(ctx context.Context, msg redis.XMessage) {
 	}
 	metrics.ConversionsTotal.WithLabelValues(qmsg.Operation, "success").Inc()
 
-	outputKey := filepath.Base(result.OutputPath)
 	var size int64
 	if info, statErr := os.Stat(result.OutputPath); statErr == nil {
 		size = info.Size()
+	}
+
+	outputKey, err := r.Store.SaveFile(ctx, result.OutputPath)
+	if err != nil {
+		r.failItem(ctx, item, "failed to store output: "+err.Error(), logger)
+		return
 	}
 
 	displayName := convert.DisplayFilename(inputFile.Filename, qmsg.Operation, filepath.Ext(result.OutputPath))

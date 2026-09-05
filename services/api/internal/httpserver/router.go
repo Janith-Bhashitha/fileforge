@@ -90,6 +90,16 @@ func NewRouter(d Deps) http.Handler {
 
 		r.Post("/convert", convertHandler.Convert)
 
+		// The presigned upload path only exists on the S3 backend; on local
+		// storage there is nothing to presign and POST /files stays the
+		// only way in. Registering it conditionally means a caller gets a
+		// clean 404 rather than an endpoint that half-works.
+		if s3Store, ok := d.Store.(*storage.S3Store); ok {
+			presignHandler := handlers.NewPresignHandler(fileRepo, s3Store, d.Audit)
+			r.Post("/files/presign", presignHandler.Presign)
+			r.Post("/files/presign/complete", presignHandler.Complete)
+		}
+
 		r.Post("/jobs", jobsHandler.Create)
 		r.Get("/jobs/{id}", jobsHandler.Get)
 		r.Get("/jobs/{id}/items", jobsHandler.ListItems)

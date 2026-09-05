@@ -18,6 +18,18 @@ type Config struct {
 	RateLimitPerMinute int
 	MaxConcurrentJobs  int
 	RetentionDays      int
+
+	// Phase 6 storage. STORAGE_BACKEND is "local" (default) or "s3"; the
+	// S3 settings are only read when it's "s3". Endpoint/ForcePathStyle
+	// exist so MinIO and LocalStack work with the same code path as AWS.
+	StorageBackend   string
+	S3Bucket         string
+	S3Region         string
+	S3Endpoint       string
+	S3PublicEndpoint string
+	S3ForcePathStyle bool
+	S3AccessKeyID    string
+	S3SecretKey      string
 }
 
 func Load() (*Config, error) {
@@ -45,6 +57,14 @@ func Load() (*Config, error) {
 		RateLimitPerMinute: getEnvInt("RATE_LIMIT_PER_MINUTE", 120),
 		MaxConcurrentJobs:  getEnvInt("MAX_CONCURRENT_JOBS", 20),
 		RetentionDays:      getEnvInt("RETENTION_DAYS", 7),
+		StorageBackend:     getEnv("STORAGE_BACKEND", "local"),
+		S3Bucket:           os.Getenv("S3_BUCKET"),
+		S3Region:           getEnv("S3_REGION", "us-east-1"),
+		S3Endpoint:         os.Getenv("S3_ENDPOINT"),
+		S3PublicEndpoint:   os.Getenv("S3_PUBLIC_ENDPOINT"),
+		S3ForcePathStyle:   os.Getenv("S3_FORCE_PATH_STYLE") == "true",
+		S3AccessKeyID:      os.Getenv("S3_ACCESS_KEY_ID"),
+		S3SecretKey:        os.Getenv("S3_SECRET_ACCESS_KEY"),
 	}, nil
 }
 

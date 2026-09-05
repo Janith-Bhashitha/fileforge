@@ -34,7 +34,17 @@ func main() {
 	}
 	defer pool.Close()
 
-	store, err := storage.NewLocalStore(cfg.StorageDir)
+	store, err := storage.New(ctx, storage.Settings{
+		Backend:        cfg.StorageBackend,
+		Dir:            cfg.StorageDir,
+		Bucket:         cfg.S3Bucket,
+		Region:         cfg.S3Region,
+		Endpoint:       cfg.S3Endpoint,
+		PublicEndpoint: cfg.S3PublicEndpoint,
+		ForcePathStyle: cfg.S3ForcePathStyle,
+		AccessKeyID:    cfg.S3AccessKeyID,
+		SecretKey:      cfg.S3SecretKey,
+	})
 	if err != nil {
 		logger.Error("failed to init storage", "error", err)
 		return
