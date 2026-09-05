@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
+import { useDeveloperMode } from '../lib/developerMode'
 import { api } from '../lib/api'
 import { ThemeToggle } from './ThemeToggle'
 import { Icon, type IconName } from './Icon'
@@ -28,7 +29,7 @@ interface NavSection {
   items: NavItem[]
 }
 
-const navSections: NavSection[] = [
+const mainSections: NavSection[] = [
   {
     label: 'Main',
     items: [
@@ -47,29 +48,35 @@ const navSections: NavSection[] = [
       { path: '/insights', label: 'Document Insights', icon: 'insights' },
     ],
   },
-  {
-    label: 'Developer',
-    items: [
-      { path: '/developer/overview', label: 'API', icon: 'api' },
-      { path: '/developer/api-keys', label: 'API Keys', icon: 'key' },
-      { path: '/developer/webhooks', label: 'Webhooks', icon: 'webhook' },
-      { path: '/developer/usage', label: 'Usage', icon: 'usage' },
-      { path: '/developer/cli', label: 'CLI', icon: 'cli' },
-    ],
-  },
-  {
-    label: 'System',
-    items: [
-      { path: '/settings', label: 'Settings', icon: 'settings' },
-      { path: '/help', label: 'Help', icon: 'help' },
-      { path: '/status', label: 'System Status', icon: 'status' },
-    ],
-  },
 ]
 
+const developerSection: NavSection = {
+  label: 'Developer',
+  items: [
+    { path: '/developer/overview', label: 'API', icon: 'api' },
+    { path: '/developer/api-keys', label: 'API Keys', icon: 'key' },
+    { path: '/developer/webhooks', label: 'Webhooks', icon: 'webhook' },
+    { path: '/developer/usage', label: 'Usage', icon: 'usage' },
+    { path: '/developer/cli', label: 'CLI', icon: 'cli' },
+  ],
+}
+
+const systemSection: NavSection = {
+  label: 'System',
+  items: [
+    { path: '/settings', label: 'Settings', icon: 'settings' },
+    { path: '/help', label: 'Help', icon: 'help' },
+    { path: '/status', label: 'System Status', icon: 'status' },
+  ],
+}
+
+// All sections, including Developer, regardless of the toggle — used only
+// to resolve a page title, since a direct link to /developer/* must still
+// show a real title even if the sidebar itself is hiding that section.
+const allSections: NavSection[] = [...mainSections, developerSection, systemSection]
+
 function titleFor(pathname: string): string {
-  if (pathname.startsWith('/developer')) return 'Developer'
-  for (const section of navSections) {
+  for (const section of allSections) {
     for (const item of section.items) {
       if (item.path === pathname) return item.label
     }
@@ -80,8 +87,11 @@ function titleFor(pathname: string): string {
 export function AppShell() {
   const location = useLocation()
   const { logout } = useAuth()
+  const { developerMode } = useDeveloperMode()
   const me = useQuery({ queryKey: ['me'], queryFn: () => api.get<MeResponse>('/api/auth/me') })
   const title = titleFor(location.pathname)
+
+  const visibleSections = developerMode ? [...mainSections, developerSection, systemSection] : [...mainSections, systemSection]
 
   return (
     <div className="shell">
@@ -92,7 +102,7 @@ export function AppShell() {
         </div>
 
         <nav className="sidebar-nav">
-          {navSections.map((section) => (
+          {visibleSections.map((section) => (
             <div className="sidebar-section" key={section.label}>
               <span className="sidebar-nav-label">{section.label}</span>
               {section.items.map((item) => (

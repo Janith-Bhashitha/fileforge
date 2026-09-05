@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import type { ShellContext } from '../components/AppShell'
+import { useDeveloperMode } from '../lib/developerMode'
+import { Switch } from '../components/Switch'
+
 
 const navItems = [
   { icon: 'user', label: 'Profile', enabled: true },
@@ -15,6 +18,8 @@ export function SettingsPage() {
   const { me } = useOutletContext<ShellContext>()
   const [name, setName] = useState(me?.email?.split('@')[0] ?? '')
   const [email, setEmail] = useState(me?.email ?? '')
+  const { developerMode, toggleDeveloperMode } = useDeveloperMode()
+
 
   return (
     <div>
@@ -93,6 +98,15 @@ export function SettingsPage() {
           <button className="btn-primary" type="button" disabled>
             Save Changes
           </button>
+        </div>
+
+        <div className="card">
+          <div className="card-title">Developer Mode</div>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            Shows the Developer section in the sidebar (API, API Keys, Webhooks, Usage, CLI) for integrating
+            FileForge into your own applications.
+          </p>
+          <Switch checked={developerMode} onChange={toggleDeveloperMode} label={developerMode ? 'On' : 'Off'} />
         </div>
       </div>
     </div>

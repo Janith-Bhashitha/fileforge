@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ThemeProvider } from './lib/theme'
+import { DeveloperModeProvider } from './lib/developerMode'
 import { AuthProvider } from './lib/auth'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AppShell } from './components/AppShell'
@@ -29,6 +30,7 @@ const queryClient = new QueryClient()
 function App() {
   return (
     <ThemeProvider>
+      <DeveloperModeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>
@@ -68,6 +70,7 @@ function App() {
           </BrowserRouter>
         </AuthProvider>
       </QueryClientProvider>
+      </DeveloperModeProvider>
     </ThemeProvider>
   )
 }
