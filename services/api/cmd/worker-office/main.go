@@ -14,6 +14,7 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/jobs"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/logging"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/queue"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/quota"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/workerconsumer"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/workerhealth"
@@ -55,6 +56,12 @@ func main() {
 		return
 	}
 
+	quotaTracker, err := quota.New(cfg.RedisURL, cfg.MaxConcurrentJobs)
+	if err != nil {
+		logger.Error("failed to init quota tracker", "error", err)
+		return
+	}
+
 	hostname, _ := os.Hostname()
 
 	runner := &workerconsumer.Runner{
@@ -69,6 +76,7 @@ func main() {
 		BatchesRepo: batches.NewRepository(pool),
 		FilesRepo:   files.NewRepository(pool),
 		Store:       store,
+		Quota:       quotaTracker,
 	}
 
 	go workerhealth.Serve(logger, ":8080")

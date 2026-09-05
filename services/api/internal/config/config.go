@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 )
 
 type Config struct {
@@ -11,6 +12,12 @@ type Config struct {
 	JWTSecret   string
 	StorageDir  string
 	RedisURL    string
+
+	// Phase 5 hardening knobs. Defaults are generous enough that normal
+	// interactive use never notices them, and low enough to blunt abuse.
+	RateLimitPerMinute int
+	MaxConcurrentJobs  int
+	RetentionDays      int
 }
 
 func Load() (*Config, error) {
@@ -30,11 +37,14 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		APIPort:     getEnv("API_PORT", "8080"),
-		DatabaseURL: dbURL,
-		JWTSecret:   jwtSecret,
-		StorageDir:  getEnv("STORAGE_DIR", "./storage"),
-		RedisURL:    redisURL,
+		APIPort:            getEnv("API_PORT", "8080"),
+		DatabaseURL:        dbURL,
+		JWTSecret:          jwtSecret,
+		StorageDir:         getEnv("STORAGE_DIR", "./storage"),
+		RedisURL:           redisURL,
+		RateLimitPerMinute: getEnvInt("RATE_LIMIT_PER_MINUTE", 120),
+		MaxConcurrentJobs:  getEnvInt("MAX_CONCURRENT_JOBS", 20),
+		RetentionDays:      getEnvInt("RETENTION_DAYS", 7),
 	}, nil
 }
 
@@ -43,4 +53,16 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(v)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }

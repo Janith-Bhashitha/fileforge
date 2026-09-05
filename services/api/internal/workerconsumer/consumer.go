@@ -23,7 +23,9 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/files"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/jobs"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/metrics"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/queue"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/quota"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 )
 
@@ -39,6 +41,7 @@ type Runner struct {
 	BatchesRepo *batches.Repository
 	FilesRepo   *files.Repository
 	Store       storage.Store
+	Quota       *quota.Tracker
 }
 
 // Run blocks forever, consuming messages from r.Stream until ctx is
@@ -153,14 +156,18 @@ func (r *Runner) handleMessage(ctx context.Context, msg redis.XMessage) {
 		return
 	}
 
+	started := time.Now()
 	result, err := processor.Process(ctx, convert.ConversionRequest{
 		InputPath: r.Store.LocalPath(inputFile.StorageKey),
 		Options:   qmsg.Options,
 	})
+	metrics.ConversionDuration.WithLabelValues(qmsg.Operation).Observe(time.Since(started).Seconds())
 	if err != nil {
+		metrics.ConversionsTotal.WithLabelValues(qmsg.Operation, "error").Inc()
 		r.retryOrFail(ctx, item, qmsg, "conversion failed: "+err.Error(), logger)
 		return
 	}
+	metrics.ConversionsTotal.WithLabelValues(qmsg.Operation, "success").Inc()
 
 	outputKey := filepath.Base(result.OutputPath)
 	var size int64
@@ -189,6 +196,8 @@ func (r *Runner) handleMessage(ctx context.Context, msg redis.XMessage) {
 
 	_ = r.JobsRepo.UpdateItem(ctx, item.ID, jobs.StatusCompleted, &outputFile.ID, nil, false)
 	r.markParentCompleted(ctx, item)
+	r.releaseQuota(ctx, inputFile.OwnerID)
+	metrics.JobItemsProcessed.WithLabelValues(qmsg.Operation, jobs.StatusCompleted).Inc()
 
 	logger.Info("job item completed", "output_file_id", outputFile.ID)
 }
@@ -206,6 +215,7 @@ func (r *Runner) retryOrFail(ctx context.Context, item *jobs.JobItem, qmsg queue
 	}
 
 	backoff := time.Duration(attempts) * 2 * time.Second
+	metrics.JobRetries.WithLabelValues(qmsg.Operation).Inc()
 	logger.Warn("job item failed, retrying", "attempt", attempts, "backoff", backoff, "error", errMsg)
 
 	_ = r.JobsRepo.UpdateItem(ctx, item.ID, jobs.StatusRetryPending, nil, &errMsg, true)
@@ -222,6 +232,26 @@ func (r *Runner) failItem(ctx context.Context, item *jobs.JobItem, errMsg string
 	logger.Error("job item failed permanently", "error", errMsg)
 	_ = r.JobsRepo.UpdateItem(ctx, item.ID, jobs.StatusFailed, nil, &errMsg, true)
 	r.markParentFailed(ctx, item, errMsg)
+	metrics.JobItemsProcessed.WithLabelValues("unknown", jobs.StatusFailed).Inc()
+
+	// The owner is only reachable via the input file, so a failure that
+	// happened before that lookup succeeded can't release a slot here -
+	// the cleanup sweep reconciles those.
+	if inputFile, err := r.FilesRepo.GetByIDAny(ctx, item.InputFileID); err == nil {
+		r.releaseQuota(ctx, inputFile.OwnerID)
+	}
+}
+
+// releaseQuota hands a slot back when an item reaches a terminal state.
+// Workers can run without a tracker configured (nil), in which case quota
+// simply isn't enforced for that deployment.
+func (r *Runner) releaseQuota(ctx context.Context, ownerID uuid.UUID) {
+	if r.Quota == nil {
+		return
+	}
+	if err := r.Quota.Release(ctx, ownerID, 1); err != nil {
+		r.Logger.Error("failed to release quota slot", "owner_id", ownerID, "error", err)
+	}
 }
 
 // markParentProcessing/Completed/Failed are the only places that branch on

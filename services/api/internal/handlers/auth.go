@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/audit"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/auth"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/users"
 )
@@ -14,10 +15,11 @@ import (
 type AuthHandler struct {
 	users     *users.Service
 	jwtSecret string
+	audit     *audit.Recorder
 }
 
-func NewAuthHandler(userService *users.Service, jwtSecret string) *AuthHandler {
-	return &AuthHandler{users: userService, jwtSecret: jwtSecret}
+func NewAuthHandler(userService *users.Service, jwtSecret string, recorder *audit.Recorder) *AuthHandler {
+	return &AuthHandler{users: userService, jwtSecret: jwtSecret, audit: recorder}
 }
 
 type registerRequest struct {
@@ -63,6 +65,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.audit.Record(r.Context(), audit.Event{
+		UserID: &u.ID, Action: audit.ActionUserRegistered,
+		ResourceType: "user", ResourceID: &u.ID,
+		Metadata: map[string]any{"email": u.Email},
+	})
+
 	writeJSON(w, http.StatusCreated, authResponse{Token: token})
 }
 
@@ -75,6 +83,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	u, err := h.users.Authenticate(r.Context(), req.Email, req.Password)
 	if err != nil {
+		// Failed logins are recorded without a user ID (the account may not
+		// exist at all) but with the attempted address, which is what makes
+		// a credential-stuffing pattern visible later.
+		h.audit.Record(r.Context(), audit.Event{
+			Action:   audit.ActionLoginFailed,
+			Metadata: map[string]any{"email": req.Email},
+		})
 		writeError(w, http.StatusUnauthorized, "invalid email or password")
 		return
 	}
@@ -84,6 +99,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to issue token")
 		return
 	}
+
+	h.audit.Record(r.Context(), audit.Event{
+		UserID: &u.ID, Action: audit.ActionUserLoggedIn,
+		ResourceType: "user", ResourceID: &u.ID,
+	})
 
 	writeJSON(w, http.StatusOK, authResponse{Token: token})
 }

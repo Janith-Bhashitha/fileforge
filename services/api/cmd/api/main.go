@@ -3,12 +3,17 @@ package main
 import (
 	"context"
 	"net/http"
+	"time"
 
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/audit"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/config"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/db"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/httpserver"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/logging"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/metrics"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/queue"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/quota"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/ratelimit"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 )
 
@@ -41,9 +46,38 @@ func main() {
 		return
 	}
 
-	router := httpserver.NewRouter(logger, pool, cfg.JWTSecret, store, producer)
+	limiter, err := ratelimit.New(cfg.RedisURL, cfg.RateLimitPerMinute, time.Minute)
+	if err != nil {
+		logger.Error("failed to init rate limiter", "error", err)
+		return
+	}
 
-	logger.Info("starting server", "port", cfg.APIPort, "storage_dir", cfg.StorageDir)
+	quotaTracker, err := quota.New(cfg.RedisURL, cfg.MaxConcurrentJobs)
+	if err != nil {
+		logger.Error("failed to init quota tracker", "error", err)
+		return
+	}
+
+	go metrics.WatchQueueDepth(ctx, logger, cfg.RedisURL,
+		[]string{"stream:pdf", "stream:image", "stream:office"}, 15*time.Second)
+
+	router := httpserver.NewRouter(httpserver.Deps{
+		Logger:    logger,
+		Pool:      pool,
+		JWTSecret: cfg.JWTSecret,
+		Store:     store,
+		Producer:  producer,
+		Limiter:   limiter,
+		Quota:     quotaTracker,
+		Audit:     audit.NewRecorder(pool, logger),
+	})
+
+	logger.Info("starting server",
+		"port", cfg.APIPort,
+		"storage_dir", cfg.StorageDir,
+		"rate_limit_per_minute", cfg.RateLimitPerMinute,
+		"max_concurrent_jobs", cfg.MaxConcurrentJobs,
+	)
 	if err := http.ListenAndServe(":"+cfg.APIPort, router); err != nil {
 		logger.Error("server error", "error", err)
 	}

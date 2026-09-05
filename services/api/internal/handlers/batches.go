@@ -14,12 +14,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/audit"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/auth"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/batches"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/files"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/jobs"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/queue"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/quota"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/validate"
 )
@@ -31,10 +33,12 @@ type BatchesHandler struct {
 	store     storage.Store
 	registry  *convert.Registry
 	producer  *queue.Producer
+	quota     *quota.Tracker
+	audit     *audit.Recorder
 }
 
-func NewBatchesHandler(repo *batches.Repository, jobsRepo *jobs.Repository, filesRepo *files.Repository, store storage.Store, registry *convert.Registry, producer *queue.Producer) *BatchesHandler {
-	return &BatchesHandler{repo: repo, jobsRepo: jobsRepo, filesRepo: filesRepo, store: store, registry: registry, producer: producer}
+func NewBatchesHandler(repo *batches.Repository, jobsRepo *jobs.Repository, filesRepo *files.Repository, store storage.Store, registry *convert.Registry, producer *queue.Producer, quotaTracker *quota.Tracker, recorder *audit.Recorder) *BatchesHandler {
+	return &BatchesHandler{repo: repo, jobsRepo: jobsRepo, filesRepo: filesRepo, store: store, registry: registry, producer: producer, quota: quotaTracker, audit: recorder}
 }
 
 type batchResponse struct {
@@ -91,6 +95,18 @@ func (h *BatchesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A batch claims one quota slot per file — otherwise a single 500-file
+	// batch would sail past a limit that a 500-job loop would hit.
+	allowed, _ := h.quota.Reserve(r.Context(), claims.UserID, len(fileHeaders))
+	if !allowed {
+		h.audit.Record(r.Context(), audit.Event{
+			UserID: &claims.UserID, Action: audit.ActionQuotaExceeded,
+			Metadata: map[string]any{"operation": operation, "files": len(fileHeaders), "limit": h.quota.Max()},
+		})
+		writeError(w, http.StatusTooManyRequests, "batch exceeds how much work you can have in flight at once")
+		return
+	}
+
 	batch := &batches.Batch{
 		ID:        uuid.New(),
 		OwnerID:   claims.UserID,
@@ -100,6 +116,7 @@ func (h *BatchesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Status:    batches.StatusProcessing,
 	}
 	if err := h.repo.Create(r.Context(), batch); err != nil {
+		_ = h.quota.Release(r.Context(), claims.UserID, len(fileHeaders))
 		writeError(w, http.StatusInternalServerError, "failed to create batch")
 		return
 	}
@@ -112,6 +129,18 @@ func (h *BatchesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	batch.Failed = failedSoFar
+
+	// Files rejected before they ever reached a worker will never hit a
+	// terminal transition, so their quota slots are handed back here.
+	if failedSoFar > 0 {
+		_ = h.quota.Release(r.Context(), claims.UserID, failedSoFar)
+	}
+
+	h.audit.Record(r.Context(), audit.Event{
+		UserID: &claims.UserID, Action: audit.ActionBatchCreated,
+		ResourceType: "batch", ResourceID: &batch.ID,
+		Metadata: map[string]any{"operation": operation, "total": batch.Total, "rejected": failedSoFar},
+	})
 
 	writeJSON(w, http.StatusCreated, batchResponse{ID: batch.ID, Operation: batch.Operation, Total: batch.Total, Completed: batch.Completed, Failed: batch.Failed, Status: batch.Status, CreatedAt: time.Now()})
 }

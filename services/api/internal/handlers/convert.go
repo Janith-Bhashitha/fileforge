@@ -7,12 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/audit"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/auth"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/files"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/metrics"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 )
 
@@ -20,10 +23,11 @@ type ConvertHandler struct {
 	repo     *files.Repository
 	store    storage.Store
 	registry *convert.Registry
+	audit    *audit.Recorder
 }
 
-func NewConvertHandler(repo *files.Repository, store storage.Store, registry *convert.Registry) *ConvertHandler {
-	return &ConvertHandler{repo: repo, store: store, registry: registry}
+func NewConvertHandler(repo *files.Repository, store storage.Store, registry *convert.Registry, recorder *audit.Recorder) *ConvertHandler {
+	return &ConvertHandler{repo: repo, store: store, registry: registry, audit: recorder}
 }
 
 type convertRequest struct {
@@ -97,14 +101,18 @@ func (h *ConvertHandler) Convert(w http.ResponseWriter, r *http.Request) {
 		options["inputs"] = strings.Join(inputPaths, ";")
 	}
 
+	started := time.Now()
 	result, err := processor.Process(r.Context(), convert.ConversionRequest{
 		InputPath: inputPaths[0],
 		Options:   options,
 	})
+	metrics.ConversionDuration.WithLabelValues(req.Operation).Observe(time.Since(started).Seconds())
 	if err != nil {
+		metrics.ConversionsTotal.WithLabelValues(req.Operation, "error").Inc()
 		writeError(w, http.StatusUnprocessableEntity, "conversion failed: "+err.Error())
 		return
 	}
+	metrics.ConversionsTotal.WithLabelValues(req.Operation, "success").Inc()
 
 	// Processors write their output directly into the storage base dir
 	// (same dir as the input), so the produced filename doubles as its
@@ -136,6 +144,12 @@ func (h *ConvertHandler) Convert(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to save output file record")
 		return
 	}
+
+	h.audit.Record(r.Context(), audit.Event{
+		UserID: &claims.UserID, Action: audit.ActionFileConverted,
+		ResourceType: "file", ResourceID: &outputFile.ID,
+		Metadata: map[string]any{"operation": req.Operation, "input_file_id": inputFiles[0].ID.String()},
+	})
 
 	writeJSON(w, http.StatusOK, fileResponse{
 		ID:       outputFile.ID,

@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/audit"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/auth"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/files"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
@@ -21,10 +22,11 @@ import (
 type FilesHandler struct {
 	repo  *files.Repository
 	store storage.Store
+	audit *audit.Recorder
 }
 
-func NewFilesHandler(repo *files.Repository, store storage.Store) *FilesHandler {
-	return &FilesHandler{repo: repo, store: store}
+func NewFilesHandler(repo *files.Repository, store storage.Store, recorder *audit.Recorder) *FilesHandler {
+	return &FilesHandler{repo: repo, store: store, audit: recorder}
 }
 
 type fileResponse struct {
@@ -95,6 +97,12 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.audit.Record(r.Context(), audit.Event{
+		UserID: &claims.UserID, Action: audit.ActionFileUploaded,
+		ResourceType: "file", ResourceID: &f.ID,
+		Metadata: map[string]any{"filename": f.Filename, "mime_type": f.MimeType, "size": f.Size},
+	})
+
 	writeJSON(w, http.StatusCreated, fileResponse{ID: f.ID, Filename: f.Filename, MimeType: f.MimeType, Size: f.Size})
 }
 
@@ -138,7 +146,6 @@ func (h *FilesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, response)
 }
-
 
 func (h *FilesHandler) Download(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
@@ -197,6 +204,12 @@ func (h *FilesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = h.store.Delete(r.Context(), f.StorageKey)
+
+	h.audit.Record(r.Context(), audit.Event{
+		UserID: &claims.UserID, Action: audit.ActionFileDeleted,
+		ResourceType: "file", ResourceID: &f.ID,
+		Metadata: map[string]any{"filename": f.Filename},
+	})
 
 	w.WriteHeader(http.StatusNoContent)
 }

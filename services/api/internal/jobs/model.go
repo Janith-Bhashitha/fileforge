@@ -20,6 +20,7 @@ const (
 	StatusRetryPending    = "retry_pending"
 	StatusCancelRequested = "cancel_requested"
 	StatusCancelled       = "cancelled"
+	StatusExpired         = "expired"
 )
 
 const MaxAttempts = 3
