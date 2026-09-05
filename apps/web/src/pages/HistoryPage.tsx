@@ -1,27 +1,31 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Icon } from '../components/Icon'
 import { FileTypeIcon } from '../components/FileTypeIcon'
 import { StatusBadge } from '../components/StatusBadge'
-import { mockHistory, type JobStatus } from '../lib/mockData'
-
-const statuses: (JobStatus | 'all')[] = ['all', 'completed', 'processing', 'queued', 'failed']
+import { api } from '../lib/api'
+import { formatBytes, formatDate, mimeTypeToLabel } from '../lib/format'
+import type { FileRecord } from '../lib/types'
 
 export function HistoryPage() {
   const [query, setQuery] = useState('')
-  const [status, setStatus] = useState<JobStatus | 'all'>('all')
 
-  const filtered = mockHistory.filter((job) => {
-    const matchesQuery = job.file.toLowerCase().includes(query.toLowerCase()) || job.id.includes(query)
-    const matchesStatus = status === 'all' || job.status === status
-    return matchesQuery && matchesStatus
+  const filesQuery = useQuery({
+    queryKey: ['files'],
+    queryFn: () => api.get<FileRecord[]>('/api/v1/files'),
   })
+
+  // A file only shows up here if it was produced by a conversion
+  // (derived_from_file_id set) — plain uploads belong to the Files page.
+  const history = (filesQuery.data ?? []).filter((f) => f.derived_from_file_id)
+  const filtered = history.filter((f) => f.filename.toLowerCase().includes(query.toLowerCase()))
 
   return (
     <div>
       <div className="page-header">
         <div>
           <h1>Processing History</h1>
-          <p>All completed, failed, and active processing jobs.</p>
+          <p>Every file produced by a conversion.</p>
         </div>
       </div>
 
@@ -31,66 +35,50 @@ export function HistoryPage() {
             <Icon name="search" size={16} />
             <input
               type="text"
-              placeholder="Search files or job IDs..."
+              placeholder="Search output files..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as JobStatus | 'all')}
-            style={{
-              background: 'var(--surface-2)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)',
-              padding: '9px 12px',
-              fontSize: 13,
-              color: 'var(--text)',
-            }}
-          >
-            {statuses.map((s) => (
-              <option key={s} value={s}>
-                {s === 'all' ? 'All statuses' : s[0].toUpperCase() + s.slice(1)}
-              </option>
-            ))}
-          </select>
         </div>
 
         <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Job ID</th>
                 <th>File</th>
                 <th>Operation</th>
                 <th>Status</th>
                 <th>Created</th>
-                <th>Duration</th>
-                <th>Output</th>
+                <th>Size</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((job) => (
-                <tr key={job.id}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{job.id}</td>
-                  <td>
-                    <div className="table-file-cell">
-                      <FileTypeIcon type={job.type} />
-                      <span className="table-file-name">{job.file}</span>
-                    </div>
-                  </td>
-                  <td>{job.operation}</td>
-                  <td>
-                    <StatusBadge status={job.status} />
-                  </td>
-                  <td>{job.created}</td>
-                  <td>{job.duration}</td>
-                  <td>{job.output}</td>
-                </tr>
-              ))}
+              {filtered.map((file) => {
+                const type = mimeTypeToLabel(file.mime_type)
+                return (
+                  <tr key={file.id}>
+                    <td>
+                      <div className="table-file-cell">
+                        <FileTypeIcon type={type} />
+                        <span className="table-file-name">{file.filename}</span>
+                      </div>
+                    </td>
+                    <td>{file.operation ?? '—'}</td>
+                    <td>
+                      <StatusBadge status="completed" />
+                    </td>
+                    <td>{formatDate(file.created_at)}</td>
+                    <td>{formatBytes(file.size)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
-          {filtered.length === 0 && <p className="empty-hint">No jobs match your filters.</p>}
+          {filesQuery.isLoading && <p className="empty-hint">Loading history…</p>}
+          {!filesQuery.isLoading && filtered.length === 0 && (
+            <p className="empty-hint">No conversions yet — try converting a file first.</p>
+          )}
         </div>
       </div>
     </div>
