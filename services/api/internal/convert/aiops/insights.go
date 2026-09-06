@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	pdfcpuapi "github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/abadojack/whatlanggo"
+	pdfcpuapi "github.com/pdfcpu/pdfcpu/pkg/api"
 
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert"
 )
@@ -23,17 +23,16 @@ import (
 type InsightsProcessor struct{}
 
 type Insights struct {
-	WordCount      int               `json:"word_count"`
-	CharacterCount int               `json:"character_count"`
-	SentenceCount  int               `json:"sentence_count"`
-	Language       string            `json:"language"`
-	LanguageName   string            `json:"language_name"`
-	Confident      bool              `json:"language_confident"`
-	OCRUsed        bool              `json:"ocr_used"`
-	TopKeywords    []string          `json:"top_keywords"`
-	PDFMetadata    *PDFMetadata      `json:"pdf_metadata,omitempty"`
-	Preview        string            `json:"text_preview"`
-	Extra          map[string]string `json:"-"`
+	WordCount      int          `json:"word_count"`
+	CharacterCount int          `json:"character_count"`
+	SentenceCount  int          `json:"sentence_count"`
+	Language       string       `json:"language"`
+	LanguageName   string       `json:"language_name"`
+	Confident      bool         `json:"language_confident"`
+	OCRUsed        bool         `json:"ocr_used"`
+	TopKeywords    []string     `json:"top_keywords"`
+	PDFMetadata    *PDFMetadata `json:"pdf_metadata,omitempty"`
+	Preview        string       `json:"text_preview"`
 }
 
 type PDFMetadata struct {
