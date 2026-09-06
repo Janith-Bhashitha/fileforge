@@ -31,7 +31,7 @@ type Client struct {
 // whether AI is "on".
 func New(apiKey, model string) *Client {
 	if model == "" {
-		model = "gemini-3.6-flash"
+		model = "gemini-flash-lite-latest"
 	}
 	return &Client{
 		apiKey: apiKey,

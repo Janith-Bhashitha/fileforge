@@ -72,7 +72,7 @@ func Load() (*Config, error) {
 		S3AccessKeyID:      os.Getenv("S3_ACCESS_KEY_ID"),
 		S3SecretKey:        os.Getenv("S3_SECRET_ACCESS_KEY"),
 		GeminiAPIKey:       os.Getenv("GEMINI_API_KEY"),
-		GeminiModel:        getEnv("GEMINI_MODEL", "gemini-3.6-flash"),
+		GeminiModel:        getEnv("GEMINI_MODEL", "gemini-flash-lite-latest"),
 	}, nil
 }
 

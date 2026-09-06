@@ -88,6 +88,7 @@ services:
   web:
     ports: !override
       - "80:80"
+      - "443:443"
   api:
     ports: !override []
   postgres:

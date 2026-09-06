@@ -62,6 +62,7 @@ services:
     ports:
       # Not 3000: Grafana already uses that under the observability profile.
       - "3001:80"
+      - "3444:443"
     depends_on:
       - api
 

@@ -77,7 +77,7 @@ variable "gemini_api_key" {
 }
 
 variable "gemini_model" {
-  description = "Gemini model name. Google occasionally retires older model names (gemini-2.0-flash was replaced by gemini-3.6-flash during this project) - override here if the default has since been deprecated."
+  description = "Gemini model to call. Defaults to the floating Flash-Lite alias rather than a dated model name - Flash-Lite is the tier built for free-tier/high-volume use, and the alias tracks whatever Google currently recommends instead of pointing at a fixed model that gets retired later (gemini-2.0-flash, used earlier in this project, already was)."
   type        = string
-  default     = "gemini-3.6-flash"
+  default     = "gemini-flash-lite-latest"
 }

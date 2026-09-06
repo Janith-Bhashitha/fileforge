@@ -4,9 +4,24 @@ resource "aws_security_group" "app" {
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    description = "Web UI and API"
+    description = "Web UI and API (HTTP)"
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Modern browsers - Chrome's HTTPS-First Mode especially, on by default and
+  # more aggressive on mobile - rewrite a bare address typed with no scheme
+  # to https://. Without this rule those connections don't fail fast, they
+  # hang for the full timeout: identical, from a user's perspective, to the
+  # server being down. nginx answers here with a self-signed certificate
+  # (see infrastructure/docker/web) since there's no domain name to get a
+  # real one validated against.
+  ingress {
+    description = "Web UI and API (HTTPS, self-signed)"
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
