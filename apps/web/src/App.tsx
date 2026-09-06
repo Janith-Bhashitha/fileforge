@@ -31,10 +31,8 @@ import { SystemStatusPage } from './pages/SystemStatusPage'
 
 const queryClient = new QueryClient()
 
-// Edit & Sign is the only page that needs pdf.js, and pdf.js is by far the
-// heaviest dependency in the app. Loading it with the route rather than with
-// the bundle keeps it off the critical path for everyone who never opens it,
-// which on a free-tier box serving over the public internet is most visits.
+// pdf.js is the heaviest dependency in the app and only this page needs it,
+// so it loads with the route rather than the main bundle.
 const EditSignPage = lazy(() =>
   import('./pages/EditSignPage').then((m) => ({ default: m.EditSignPage }))
 )

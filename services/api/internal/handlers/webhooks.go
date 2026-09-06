@@ -47,10 +47,9 @@ type createWebhookRequest struct {
 	EventTypes []string `json:"event_types"`
 }
 
-// deliveryResponse mirrors webhooks.Delivery for the wire. The domain struct
-// carries no json tags, and the raw Payload is of no use to the dashboard -
-// it would only ship a base64 blob per row - so the log view gets the
-// delivery metadata and nothing else.
+// deliveryResponse mirrors webhooks.Delivery for the wire; the domain struct
+// carries no json tags. Payload is omitted - it would ship a base64 blob per
+// row that the log view has no use for.
 type deliveryResponse struct {
 	ID              uuid.UUID  `json:"id"`
 	WebhookID       uuid.UUID  `json:"webhook_id"`
@@ -235,9 +234,8 @@ func (h *WebhooksHandler) SendTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create rejects an empty event list, so this only guards a row edited
-	// directly in the database - but indexing [0] blind would panic the
-	// handler rather than fail the request, which is never the right trade.
+	// Create rejects an empty event list, so this only guards a hand-edited
+	// row - but indexing [0] blind would panic rather than fail.
 	if len(hook.EventTypes) == 0 {
 		writeError(w, http.StatusUnprocessableEntity, "webhook has no event types configured")
 		return

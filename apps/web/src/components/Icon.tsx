@@ -34,6 +34,8 @@ export type IconName =
   | 'signature'
   | 'edit'
   | 'arrow-right'
+  | 'eye'
+  | 'eye-off'
 
 interface IconProps {
   name: IconName
@@ -268,6 +270,22 @@ export function Icon({ name, size = 18 }: IconProps) {
       return (
         <svg {...common}>
           <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      )
+    case 'eye':
+      return (
+        <svg {...common}>
+          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      )
+    case 'eye-off':
+      return (
+        <svg {...common}>
+          <path d="M10.6 6.2A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a18.6 18.6 0 0 1-3.4 4.3" />
+          <path d="M6.6 7.7C3.8 9.4 2 12 2 12s3.5 7 10 7a10 10 0 0 0 4.2-.9" />
+          <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+          <path d="M3 3l18 18" />
         </svg>
       )
     case 'arrow-right':

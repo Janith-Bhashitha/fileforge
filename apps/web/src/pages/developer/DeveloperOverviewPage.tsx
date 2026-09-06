@@ -1,50 +1,55 @@
+import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Icon } from '../../components/Icon'
+import { api } from '../../lib/api'
+import { formatBytes } from '../../lib/format'
 
-const bars = [40, 65, 55, 48, 58, 70, 35, 45, 40, 38, 60, 50, 55, 52, 45, 40, 30, 42, 38, 80, 75, 60]
+interface UsageSummary {
+  conversions: number
+  uploads: number
+  bytes_stored: number
+}
 
 export function DeveloperOverviewPage() {
+  const usage = useQuery({
+    queryKey: ['usage', '30d'],
+    queryFn: () => api.get<UsageSummary>('/api/v1/usage?range=30d'),
+  })
+
+  const show = (value: string) => (usage.isLoading ? '—' : value)
+
   return (
     <div>
       <div className="card-row" style={{ marginBottom: 16 }}>
         <div className="stat-tile">
           <div className="stat-tile-top">
-            <span className="stat-tile-label">API Requests</span>
+            <span className="stat-tile-label">Conversions</span>
             <span className="stat-tile-icon">
-              <Icon name="api" size={16} />
+              <Icon name="convert" size={16} />
             </span>
           </div>
-          <div className="stat-tile-value">84,291</div>
+          <div className="stat-tile-value">{show((usage.data?.conversions ?? 0).toLocaleString())}</div>
           <div className="stat-tile-caption">Last 30 days</div>
         </div>
         <div className="stat-tile">
           <div className="stat-tile-top">
-            <span className="stat-tile-label">Files Processed</span>
+            <span className="stat-tile-label">Files Uploaded</span>
             <span className="stat-tile-icon">
-              <Icon name="check" size={16} />
+              <Icon name="upload" size={16} />
             </span>
           </div>
-          <div className="stat-tile-value">12,841</div>
-          <div className="stat-tile-caption">via API</div>
+          <div className="stat-tile-value">{show((usage.data?.uploads ?? 0).toLocaleString())}</div>
+          <div className="stat-tile-caption">Last 30 days</div>
         </div>
         <div className="stat-tile">
           <div className="stat-tile-top">
-            <span className="stat-tile-label">Avg Response</span>
+            <span className="stat-tile-label">Stored Now</span>
             <span className="stat-tile-icon">
-              <Icon name="usage" size={16} />
+              <Icon name="database" size={16} />
             </span>
           </div>
-          <div className="stat-tile-value">142ms</div>
-          <div className="stat-tile-caption">p95: 890ms</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-tile-top">
-            <span className="stat-tile-label">Error Rate</span>
-            <span className="stat-tile-icon">
-              <Icon name="x" size={16} />
-            </span>
-          </div>
-          <div className="stat-tile-value">0.8%</div>
-          <div className="stat-tile-caption">Last 7 days</div>
+          <div className="stat-tile-value">{show(formatBytes(usage.data?.bytes_stored ?? 0))}</div>
+          <div className="stat-tile-caption">All files you hold</div>
         </div>
       </div>
 
@@ -64,26 +69,20 @@ export function DeveloperOverviewPage() {
   }'`}</div>
         </div>
         <div className="card">
-          <div className="card-title">API Requests — Last 14 Days</div>
-          <div className="bar-chart">
-            {bars.slice(-14).map((h, i) => (
-              <div
-                key={i}
-                className={`bar-chart-bar ${i === 13 ? 'bar-chart-bar-active' : ''}`}
-                style={{ height: `${h}%` }}
-              />
-            ))}
+          <div className="card-title">Authentication</div>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+            Send your key as an <code>X-API-Key</code> header on any <code>/api/v1</code> request. Keys are shown
+            once when created and stored only as a hash, so a lost key must be revoked and replaced.
+          </p>
+          <div className="pill-group" style={{ marginTop: 14 }}>
+            <Link className="btn-secondary" to="/developer/api-keys" style={{ textDecoration: 'none' }}>
+              <Icon name="key" size={14} /> Manage API keys
+            </Link>
+            <Link className="btn-secondary" to="/developer/usage" style={{ textDecoration: 'none' }}>
+              <Icon name="usage" size={14} /> View usage
+            </Link>
           </div>
         </div>
-      </div>
-
-      <div className="page-header-actions">
-        <button className="btn-primary" type="button" disabled>
-          <Icon name="key" size={14} /> Create API Key
-        </button>
-        <button className="btn-secondary" type="button" disabled>
-          View Documentation
-        </button>
       </div>
     </div>
   )

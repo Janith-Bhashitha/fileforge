@@ -4,7 +4,7 @@
 // XPENDING/XCLAIM sweep leaves behind).
 //
 // It runs to completion and exits, so it can be driven by cron now and by
-// an ECS scheduled task in Phase 6 without changing anything but the
+// an ECS scheduled task without changing anything but the
 // scheduler.
 package main
 

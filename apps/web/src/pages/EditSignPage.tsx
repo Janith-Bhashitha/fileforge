@@ -6,9 +6,8 @@ import { api, ApiError } from '../lib/api'
 import { useToast } from '../components/Toast'
 import './EditSignPage.css'
 
-// pdf.js does its parsing off the main thread. Vite's ?url import hands us
-// the hashed asset path for the worker bundle, which is what keeps this
-// working in a production build as well as in dev.
+// Vite's ?url import gives the hashed asset path for the worker bundle,
+// which is what makes this work in a production build as well as dev.
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
 
 interface FileResponse {
@@ -18,10 +17,8 @@ interface FileResponse {
   size: number
 }
 
-// Mirrors pdfops.OverlayElement on the API. x/y are PDF points from the
-// bottom-left of the page and address the element's own bottom-left corner,
-// which is the one convention shared end to end - the canvas converts into
-// it on placement and never deals in it again.
+// Mirrors pdfops.OverlayElement. x/y are PDF points from the bottom-left of
+// the page, addressing the element's own bottom-left corner.
 interface OverlayElement {
   id: string
   type: 'text' | 'image'
@@ -37,9 +34,8 @@ interface OverlayElement {
 
 type Tool = 'text' | 'signature'
 
-// Rendering above 1:1 keeps the preview legible on a high-DPI screen; the
-// scale is divided back out when converting a click into PDF points, so it
-// never leaks into the coordinates sent to the API.
+// Above 1:1 for legibility on high-DPI screens. Divided back out when a
+// click becomes PDF points, so it never reaches the API.
 const RENDER_SCALE = 1.5
 
 export function EditSignPage() {
@@ -63,8 +59,8 @@ export function EditSignPage() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // Guards against two renders racing onto the same canvas: pdf.js rejects a
-  // render that starts while another is still running on the same context.
+  // pdf.js rejects a render that starts while another is running on the
+  // same context.
   const renderTaskRef = useRef<pdfjsLib.RenderTask | null>(null)
 
   function resetDocument() {
@@ -122,10 +118,8 @@ export function EditSignPage() {
     return () => renderTaskRef.current?.cancel()
   }, [renderPage])
 
-  // A click places the active tool's element with its bottom-left corner at
-  // the pointer. The canvas may be laid out smaller than its backing store,
-  // so positions are taken as a fraction of the displayed box rather than
-  // from raw client offsets.
+  // The canvas may be laid out smaller than its backing store, so the click
+  // is taken as a fraction of the displayed box, not a raw client offset.
   function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!pdfDoc) return
 
@@ -169,8 +163,7 @@ export function EditSignPage() {
       formData.append('file', file)
       const uploaded = await api.upload<FileResponse>('/api/v1/files', formData)
 
-      // `id` is local bookkeeping for the placed-elements list; the API
-      // neither wants nor understands it.
+      // `id` is local bookkeeping for the list; the API has no use for it.
       const payload = elements.map((el) => ({
         type: el.type,
         page: el.page,
@@ -357,13 +350,19 @@ export function EditSignPage() {
 
           <div className="card editsign-stage">
             <div className="editsign-pager">
+              {/* The only chevron points down, so each is rotated to face
+                  the way it moves. */}
               <button
                 type="button"
                 className="btn-icon"
+                aria-label="Previous page"
+                title="Previous page"
                 disabled={pageNumber <= 1}
                 onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
               >
-                <Icon name="chevron" size={14} />
+                <span style={{ display: 'flex', transform: 'rotate(90deg)' }}>
+                  <Icon name="chevron" size={14} />
+                </span>
               </button>
               <span>
                 Page {pageNumber} of {pdfDoc.numPages}
@@ -371,17 +370,21 @@ export function EditSignPage() {
               <button
                 type="button"
                 className="btn-icon"
+                aria-label="Next page"
+                title="Next page"
                 disabled={pageNumber >= pdfDoc.numPages}
                 onClick={() => setPageNumber((p) => Math.min(pdfDoc.numPages, p + 1))}
               >
-                <Icon name="chevron" size={14} />
+                <span style={{ display: 'flex', transform: 'rotate(-90deg)' }}>
+                  <Icon name="chevron" size={14} />
+                </span>
               </button>
             </div>
 
             <div className="editsign-canvas-wrap">
               <canvas ref={canvasRef} className="editsign-canvas" onClick={handleCanvasClick} />
-              {/* Previews sit in the same bottom-left space the API uses, so
-                  what is shown here is where the element actually lands. */}
+              {/* Previews use the same bottom-left space as the API, so this
+                  is where the element actually lands. */}
               {pageElements.map((el) => (
                 <div
                   key={el.id}
@@ -472,12 +475,15 @@ function SignaturePad({ signature, width, onWidthChange, onChange }: SignaturePa
   return (
     <>
       <div className="field-row">
-        <label>Draw your signature</label>
+        {/* htmlFor can't target a <canvas>, so the name lives on the canvas. */}
+        <span className="field-row-caption">Draw your signature</span>
         <canvas
           ref={padRef}
           width={360}
           height={140}
           className="editsign-pad"
+          role="img"
+          aria-label="Signature drawing area"
           onPointerDown={start}
           onPointerMove={move}
           onPointerUp={end}

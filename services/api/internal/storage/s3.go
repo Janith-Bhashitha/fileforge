@@ -16,13 +16,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// S3Store is the Phase 6 backend. It satisfies the same Store interface as
-// LocalStore, so no handler, worker or processor changes when the storage
-// backend does — swapping them is a config change, which is the whole point
-// of having kept storage keys opaque since Phase 2.
-//
-// It also drives MinIO (and LocalStack) unchanged: those speak the S3 API,
-// so the same code is testable locally without an AWS account.
+// S3Store satisfies the same Store interface as LocalStore, so switching
+// backends is a config change. It drives MinIO and LocalStack unchanged,
+// which is how the storage tests run without an AWS account.
 type S3Store struct {
 	client  *s3.Client
 	presign *s3.PresignClient
@@ -39,16 +35,14 @@ type S3Config struct {
 	Endpoint       string
 	ForcePathStyle bool
 
-	// PublicEndpoint is the address a *browser* can reach, when that
-	// differs from the one the server uses. Presigned URLs are handed to
-	// the client, so signing them against an internal hostname (a Docker
-	// service name, a VPC endpoint) produces links nobody outside can
-	// open. Empty means the two are the same, which is the normal AWS case.
+	// PublicEndpoint is the address a browser can reach, when that differs
+	// from the one the server uses. A presigned URL signed against an
+	// internal hostname produces a link nobody outside can open. Empty
+	// means the two are the same, the normal AWS case.
 	PublicEndpoint string
 
-	// Static credentials, for MinIO or an explicitly-configured deployment.
-	// Left empty, the SDK's default chain applies (env, shared config, and
-	// on ECS the task role — which is what production should use).
+	// Static credentials, for MinIO. Left empty, the SDK's default chain
+	// applies (env, shared config, and on EC2 the instance role).
 	AccessKeyID     string
 	SecretAccessKey string
 
@@ -83,9 +77,9 @@ func NewS3Store(ctx context.Context, cfg S3Config) (*S3Store, error) {
 		o.UsePathStyle = cfg.ForcePathStyle
 	})
 
-	// Presigning goes through its own client so the signature is computed
-	// against the host the client will actually call. A URL signed for one
-	// hostname does not verify when requested at another.
+	// Presigning uses its own client so the signature is computed against
+	// the host the caller will actually reach; a URL signed for one hostname
+	// does not verify at another.
 	presignSource := client
 	if cfg.PublicEndpoint != "" {
 		presignSource = s3.NewFromConfig(awsCfg, func(o *s3.Options) {
@@ -102,9 +96,6 @@ func NewS3Store(ctx context.Context, cfg S3Config) (*S3Store, error) {
 	}, nil
 }
 
-// Keys are built by ObjectKey: an owner prefix plus an opaque UUID, never
-// the user's filename. The original name lives in the database, so an object
-// key leaks nothing and can't be guessed or enumerated.
 func (s *S3Store) Save(ctx context.Context, ownerID uuid.UUID, data []byte, ext string) (string, error) {
 	key := ObjectKey(ownerID, ext)
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
@@ -118,10 +109,8 @@ func (s *S3Store) Save(ctx context.Context, ownerID uuid.UUID, data []byte, ext 
 	return key, nil
 }
 
-// SaveFile takes ownership of localPath: once the object is safely in the
-// bucket the scratch copy is removed, since nothing reads from local disk
-// under this backend. (LocalStore's SaveFile keeps the file, because there
-// the file *is* the stored object.)
+// SaveFile takes ownership of localPath and removes it once the object is
+// in the bucket; nothing reads from local disk under this backend.
 func (s *S3Store) SaveFile(ctx context.Context, ownerID uuid.UUID, localPath string) (string, error) {
 	f, err := os.Open(localPath)
 	if err != nil {
@@ -147,10 +136,8 @@ func (s *S3Store) SaveFile(ctx context.Context, ownerID uuid.UUID, localPath str
 // deletes it. Callers must defer the cleanup: scratch files are the one
 // thing that silently fills a disk.
 func (s *S3Store) Fetch(ctx context.Context, key string) (string, func(), error) {
-	// The key decides where the scratch copy is written locally, and one
-	// caller (ServeAvatar) takes it straight from a public URL - so a key
-	// that climbs out of WorkDir has to be refused before Create, not
-	// after.
+	// The key decides where the scratch copy lands, and ServeAvatar takes
+	// its key straight from a public URL.
 	if err := safeKey(key); err != nil {
 		return "", func() {}, err
 	}

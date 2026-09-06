@@ -61,7 +61,7 @@ const developerSection: NavSection = {
     { path: '/developer/api-keys', label: 'API Keys', icon: 'key' },
     { path: '/developer/webhooks', label: 'Webhooks', icon: 'webhook' },
     { path: '/developer/usage', label: 'Usage', icon: 'usage' },
-    { path: '/developer/cli', label: 'CLI', icon: 'cli' },
+    { path: '/developer/cli', label: 'Shell', icon: 'cli' },
   ],
 }
 

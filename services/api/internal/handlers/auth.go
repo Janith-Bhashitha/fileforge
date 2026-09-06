@@ -270,10 +270,8 @@ func (h *AuthHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
 // sequential - the same exposure trade-off already accepted for every
 // other storage key in this app.
 func (h *AuthHandler) ServeAvatar(w http.ResponseWriter, r *http.Request) {
-	// "*" rather than a named parameter: the key spans several path
-	// segments (it is namespaced by owner), and only a wildcard captures it
-	// whole. Traversal is not a concern the route can settle, so the store
-	// rejects an unsafe key itself - see storage.safeKey.
+	// "*" not a named parameter: the key is namespaced by owner and so spans
+	// several path segments. The store rejects unsafe keys itself.
 	key := chi.URLParam(r, "*")
 	if key == "" {
 		writeError(w, http.StatusBadRequest, "missing avatar key")
@@ -352,9 +350,16 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if u != nil {
 		resetURL := h.frontendURL + "/reset-password?token=" + token
 		if h.mailer.Configured() {
-			if err := h.mailer.SendPasswordReset(u.Email, resetURL); err != nil {
-				h.logger.Error("failed to send password reset email", "error", err)
-			}
+			// Off the request path: mail is only sent when the address has
+			// an account, so waiting here would make a registered email
+			// measurably slower to answer - a timing oracle giving away
+			// exactly what the identical response body withholds.
+			email, url := u.Email, resetURL
+			go func() {
+				if err := h.mailer.SendPasswordReset(email, url); err != nil {
+					h.logger.Error("failed to send password reset email", "error", err)
+				}
+			}()
 		} else {
 			// No SMTP configured - this is the dev/demo fallback, not a
 			// silent failure: the link is right here in the server log.

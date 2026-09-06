@@ -138,8 +138,9 @@ export function DeveloperWebhooksPage() {
             />
           </div>
           <div className="field-row">
-            <label>Events</label>
-            <div className="pill-group">
+            {/* A group of buttons, so a caption rather than a <label>. */}
+            <span className="field-row-caption">Events</span>
+            <div className="pill-group" role="group" aria-label="Events">
               {WEBHOOK_EVENT_TYPES.map((event) => (
                 <button
                   key={event}

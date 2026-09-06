@@ -12,8 +12,8 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 )
 
-// Unlike the S3 tests these need nothing running, so they are what actually
-// guards the owner-prefix logic on an ordinary `go test ./...`.
+// Unlike the S3 tests these need nothing running, so they are what guards
+// the owner-prefix logic on an ordinary `go test ./...`.
 
 func newLocalStore(t *testing.T) *storage.LocalStore {
 	t.Helper()
@@ -57,8 +57,6 @@ func TestLocalSaveNamespacesByOwner(t *testing.T) {
 	}
 }
 
-// Two owners saving the same bytes must land in different folders - that
-// separation is the entire point of the prefix.
 func TestLocalSaveSeparatesOwners(t *testing.T) {
 	store := newLocalStore(t)
 	ctx := context.Background()
@@ -83,8 +81,7 @@ func TestLocalSaveFileMovesProducedFileUnderOwner(t *testing.T) {
 	ctx := context.Background()
 	owner := uuid.New()
 
-	// Stand in for a processor's output, written into the store's work dir
-	// exactly as a real one does.
+	// Stands in for a processor's output, written into the store's work dir.
 	produced := filepath.Join(store.WorkDir(), "produced.pdf")
 	if err := os.WriteFile(produced, []byte("%PDF-1.4 fake"), 0o644); err != nil {
 		t.Fatalf("write produced file: %v", err)
@@ -112,9 +109,8 @@ func TestLocalSaveFileMovesProducedFileUnderOwner(t *testing.T) {
 	}
 }
 
-// Keys are stored in full in the database, so objects written before the
-// owner prefix existed must keep working untouched. This is what makes the
-// change safe to deploy without a backfill.
+// Keys are stored in full, so objects written before the owner prefix
+// existed must keep working - that is what makes it safe without a backfill.
 func TestLocalFetchStillReadsLegacyFlatKeys(t *testing.T) {
 	dir := t.TempDir()
 	store, err := storage.NewLocalStore(dir)

@@ -274,7 +274,7 @@ func (r *Runner) releaseQuota(ctx context.Context, ownerID uuid.UUID) {
 }
 
 // markParentProcessing/Completed/Failed are the only places that branch on
-// whether an item belongs to a single Job (Phase 3) or a Batch (Phase 4) -
+// whether an item belongs to a single Job or a Batch -
 // everything above this point treats a JobItem identically either way.
 func (r *Runner) markParentProcessing(ctx context.Context, item *jobs.JobItem) {
 	if item.JobID != nil {

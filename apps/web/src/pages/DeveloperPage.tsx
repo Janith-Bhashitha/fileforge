@@ -5,7 +5,7 @@ const tabs = [
   { path: '/developer/api-keys', label: 'API Keys' },
   { path: '/developer/webhooks', label: 'Webhooks' },
   { path: '/developer/usage', label: 'Usage' },
-  { path: '/developer/cli', label: 'CLI' },
+  { path: '/developer/cli', label: 'Shell' },
 ]
 
 export function DeveloperPage() {

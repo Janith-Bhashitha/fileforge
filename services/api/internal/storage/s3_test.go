@@ -14,9 +14,8 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 )
 
-// Every object belongs to someone: keys are namespaced by owner, so the
-// tests need an owner to write as. A fresh one per test keeps runs from
-// colliding in a shared bucket.
+// Keys are namespaced by owner, so each test needs one. A fresh owner per
+// test keeps runs from colliding in a shared bucket.
 func testOwner() uuid.UUID { return uuid.New() }
 
 // These run against MinIO, which speaks the S3 API, so the exact code path
@@ -72,8 +71,6 @@ func TestS3RoundTrip(t *testing.T) {
 	if strings.Contains(key, "hello") {
 		t.Errorf("key %q leaks content", key)
 	}
-	// Objects live under their owner's prefix, which is what makes a bucket
-	// browsable per user and per-account deletion a prefix operation.
 	if want := "users/" + owner.String() + "/"; !strings.HasPrefix(key, want) {
 		t.Errorf("key %q should start with %q", key, want)
 	}
@@ -139,7 +136,7 @@ func TestS3DeleteRemovesObject(t *testing.T) {
 	}
 }
 
-// The presigned flow is the point of Phase 6: bytes go browser->S3 without
+// The presigned flow exists so bytes go browser->S3 without
 // passing through the API at all.
 func TestS3PresignedUploadBypassesAPI(t *testing.T) {
 	store := newTestStore(t)

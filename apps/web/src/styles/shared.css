@@ -301,14 +301,22 @@
   margin-bottom: 16px;
 }
 
-.field-row label {
+/* .field-row-caption captions a group of controls (toggle pills, a canvas)
+   that no single <label> can point at. */
+.field-row label,
+.field-row-caption {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-muted);
 }
 
+/* Every text-like input, not just [type=text] - restricting it left the
+   password and number fields with raw browser styling. */
 .field-row select,
-.field-row input[type='text'] {
+.field-row input[type='text'],
+.field-row input[type='password'],
+.field-row input[type='email'],
+.field-row input[type='number'] {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);

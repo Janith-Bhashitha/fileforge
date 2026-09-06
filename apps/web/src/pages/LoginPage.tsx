@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { AuthLayout } from '../components/AuthLayout'
+import { PasswordInput } from '../components/PasswordInput'
 import '../components/Form.css'
 
 interface LoginResponse {
@@ -63,12 +64,12 @@ export function LoginPage() {
               Forgot password?
             </Link>
           </div>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={setPassword}
             placeholder="Password"
+            autoComplete="current-password"
             required
           />
         </div>

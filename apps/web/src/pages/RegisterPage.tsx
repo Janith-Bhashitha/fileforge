@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { AuthLayout } from '../components/AuthLayout'
+import { PasswordInput } from '../components/PasswordInput'
 import '../components/Form.css'
 
 interface RegisterResponse {
@@ -74,12 +75,12 @@ export function RegisterPage() {
         </div>
         <div className="field">
           <label htmlFor="password">Password</label>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={setPassword}
             placeholder="Password"
+            autoComplete="new-password"
             required
             minLength={8}
           />

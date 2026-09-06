@@ -38,8 +38,8 @@ type convertRequest struct {
 	Options   map[string]string `json:"options"`
 }
 
-// Convert runs a registered operation synchronously (Phase 2 has no queue
-// yet — Phase 3 wraps this same registry/processor call in a worker).
+// Convert runs a registered operation synchronously. The worker wraps this
+// same registry/processor call for queued jobs.
 //
 // Most operations take one file (file_id). Multi-input operations like
 // pdf-merge accept file_ids instead, listed in the order they should be

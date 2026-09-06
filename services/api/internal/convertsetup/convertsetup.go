@@ -1,9 +1,6 @@
-// Package convertsetup wires up the operation registry. It exists as its
-// own package (rather than living in internal/convert itself) because it
-// has to import every processor subpackage (imageops, pdfops, office,
-// txtops, aiops), and those subpackages already import internal/convert for
-// the shared Processor/Registry types - putting this here instead of inside
-// internal/convert avoids a Go import cycle.
+// Package convertsetup wires up the operation registry. It is separate from
+// internal/convert because it imports every processor subpackage, and those
+// already import internal/convert - keeping it here avoids an import cycle.
 package convertsetup
 
 import (
@@ -16,17 +13,12 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/txtops"
 )
 
-// BuildRegistry registers every known operation under its "name:version"
-// key. The API (for its synchronous /convert endpoint) and every worker
-// (for its async job processing) call this same function, so there's one
-// place that ever lists what FileForge can do.
+// BuildRegistry registers every operation under its "name:version" key. The
+// API and every worker call this, so one place lists what FileForge can do.
 //
-// geminiClient is threaded in rather than constructed here because it's the
-// one processor with real configuration (an API key) behind it - every
-// other processor is a stateless value type. A nil-safe client (created via
-// aiclient.New with an empty key) is expected when AI features aren't
-// configured; ai-analyze then fails clearly per-request instead of the
-// whole registry refusing to build.
+// geminiClient is passed in because it is the only processor with real
+// configuration behind it. An empty-key client is expected when AI is
+// unconfigured; ai-analyze then fails per-request rather than at startup.
 func BuildRegistry(geminiClient *aiclient.Client) *convert.Registry {
 	reg := convert.NewRegistry()
 	reg.Register("image-to-pdf", "v1", imageops.ImageToPDFProcessor{})

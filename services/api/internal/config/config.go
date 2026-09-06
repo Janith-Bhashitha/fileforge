@@ -13,13 +13,13 @@ type Config struct {
 	StorageDir  string
 	RedisURL    string
 
-	// Phase 5 hardening knobs. Defaults are generous enough that normal
+	// Hardening knobs. Defaults are generous enough that normal
 	// interactive use never notices them, and low enough to blunt abuse.
 	RateLimitPerMinute int
 	MaxConcurrentJobs  int
 	RetentionDays      int
 
-	// Phase 6 storage. STORAGE_BACKEND is "local" (default) or "s3"; the
+	// Storage. STORAGE_BACKEND is "local" (default) or "s3"; the
 	// S3 settings are only read when it's "s3". Endpoint/ForcePathStyle
 	// exist so MinIO and LocalStack work with the same code path as AWS.
 	StorageBackend   string

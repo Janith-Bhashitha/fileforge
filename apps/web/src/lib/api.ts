@@ -75,13 +75,10 @@ async function downloadBlob(path: string): Promise<Blob> {
   return res.blob()
 }
 
-// assetUrl resolves a server-relative path the API handed us (an avatar, say)
-// against the same base the API itself is on.
-//
-// In production the base is empty and the page is same-origin with the API,
-// so this returns the path untouched and nginx proxies it. In development
-// the API is on a different port, and an <img src="/avatars/..."> would
-// otherwise resolve against the Vite dev server and 404.
+// Resolves a server-relative path from the API (an avatar) against the same
+// base the API is on. In production that base is empty and nginx proxies the
+// path; in development an <img src="/avatars/..."> would otherwise resolve
+// against the Vite dev server and 404.
 export function assetUrl(path: string): string {
   if (/^https?:\/\//.test(path)) return path
   return `${API_BASE_URL}${path}`

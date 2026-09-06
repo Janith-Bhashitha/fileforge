@@ -1,6 +1,6 @@
 // Package ratelimit implements a Redis-backed fixed-window rate limiter.
 //
-// It lives in Redis rather than in process memory because Phase 6 runs
+// It lives in Redis rather than in process memory because deployments run
 // several API replicas behind a load balancer — an in-memory limiter would
 // let a caller multiply their allowance by the replica count.
 package ratelimit

@@ -6,8 +6,8 @@ import (
 )
 
 // ConversionRequest describes one unit of work: an input file's bytes, the
-// operation to run, and any options. Storage is left to the caller (Phase 2
-// writes to local disk; Phase 6 swaps this for S3 without touching processors).
+// operation to run, and any options. Storage is left to the caller, so the
+// backend can swap between local disk and S3 without touching processors.
 type ConversionRequest struct {
 	InputPath string
 	Options   map[string]string
@@ -22,8 +22,8 @@ type ConversionResult struct {
 }
 
 // Processor is the interface every conversion operation implements. Keeping
-// this stable is what lets Phase 3 wrap it with a queue and Phase 6 wrap it
-// with S3 without rewriting operation logic.
+// this stable is what lets the queue and the S3 backend wrap it without
+// rewriting operation logic.
 type Processor interface {
 	Process(ctx context.Context, req ConversionRequest) (ConversionResult, error)
 }

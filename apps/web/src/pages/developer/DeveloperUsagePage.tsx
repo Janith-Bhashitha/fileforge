@@ -1,11 +1,41 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Icon } from '../../components/Icon'
+import { api } from '../../lib/api'
+import { formatBytes } from '../../lib/format'
 
-const ranges = ['24h', '7d', '30d', 'Custom']
-const bars = [45, 70, 60, 55, 65, 72, 40, 50, 42, 38, 30, 48, 58, 45, 65, 40, 45, 55, 62, 58, 52, 68, 60, 55, 42, 48, 38, 45, 78, 72]
+interface DailyPoint {
+  date: string
+  count: number
+}
+
+interface OperationCount {
+  operation: string
+  count: number
+}
+
+interface UsageSummary {
+  range: string
+  conversions: number
+  uploads: number
+  bytes_in: number
+  bytes_stored: number
+  daily: DailyPoint[]
+  top_operations: OperationCount[]
+}
+
+const ranges = ['24h', '7d', '30d']
 
 export function DeveloperUsagePage() {
   const [range, setRange] = useState('30d')
+
+  const usage = useQuery({
+    queryKey: ['usage', range],
+    queryFn: () => api.get<UsageSummary>(`/api/v1/usage?range=${range}`),
+  })
+
+  const data = usage.data
+  const busiest = Math.max(1, ...(data?.daily ?? []).map((d) => d.count))
 
   return (
     <div>
@@ -22,84 +52,100 @@ export function DeveloperUsagePage() {
         ))}
       </div>
 
-      <div className="card-row" style={{ marginBottom: 16 }}>
-        <div className="stat-tile">
-          <div className="stat-tile-top">
-            <span className="stat-tile-label">Total Requests</span>
-            <span className="stat-tile-icon">
-              <Icon name="api" size={16} />
-            </span>
-          </div>
-          <div className="stat-tile-value">84,291</div>
-          <div className="stat-tile-caption">+12% vs prev period</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-tile-top">
-            <span className="stat-tile-label">Successful</span>
-            <span className="stat-tile-icon">
-              <Icon name="check" size={16} />
-            </span>
-          </div>
-          <div className="stat-tile-value">83,620</div>
-          <div className="stat-tile-caption">99.2% success rate</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-tile-top">
-            <span className="stat-tile-label">Failed</span>
-            <span className="stat-tile-icon">
-              <Icon name="x" size={16} />
-            </span>
-          </div>
-          <div className="stat-tile-value">671</div>
-          <div className="stat-tile-caption">0.8% error rate</div>
-        </div>
-      </div>
+      {usage.isError && <p className="empty-hint">Could not load usage.</p>}
 
       <div className="card-row" style={{ marginBottom: 16 }}>
-        <div className="stat-tile">
-          <div className="stat-tile-top">
-            <span className="stat-tile-label">Files Processed</span>
-            <span className="stat-tile-icon">
-              <Icon name="usage" size={16} />
-            </span>
-          </div>
-          <div className="stat-tile-value">12,841</div>
-          <div className="stat-tile-caption">via API</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-tile-top">
-            <span className="stat-tile-label">Avg Processing</span>
-            <span className="stat-tile-icon">
-              <Icon name="usage" size={16} />
-            </span>
-          </div>
-          <div className="stat-tile-value">5.2s</div>
-          <div className="stat-tile-caption">p95: 18.4s</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-tile-top">
-            <span className="stat-tile-label">Data Processed</span>
-            <span className="stat-tile-icon">
-              <Icon name="usage" size={16} />
-            </span>
-          </div>
-          <div className="stat-tile-value">48.2 GB</div>
-          <div className="stat-tile-caption">input + output</div>
-        </div>
+        <Tile
+          label="Conversions"
+          icon="convert"
+          value={usage.isLoading ? '—' : (data?.conversions ?? 0).toLocaleString()}
+          caption={`Last ${range}`}
+        />
+        <Tile
+          label="Files Uploaded"
+          icon="upload"
+          value={usage.isLoading ? '—' : (data?.uploads ?? 0).toLocaleString()}
+          caption={`Last ${range}`}
+        />
+        <Tile
+          label="Data Uploaded"
+          icon="usage"
+          value={usage.isLoading ? '—' : formatBytes(data?.bytes_in ?? 0)}
+          caption={`Last ${range}`}
+        />
+        <Tile
+          label="Stored Now"
+          icon="database"
+          value={usage.isLoading ? '—' : formatBytes(data?.bytes_stored ?? 0)}
+          caption="All files you hold"
+        />
       </div>
 
       <div className="card">
-        <div className="card-title">Requests over time · Last {range}</div>
-        <div className="bar-chart">
-          {bars.map((h, i) => (
-            <div
-              key={i}
-              className={`bar-chart-bar ${i >= bars.length - 3 ? 'bar-chart-bar-active' : ''}`}
-              style={{ height: `${h}%` }}
-            />
-          ))}
-        </div>
+        <div className="card-title">Conversions per day · Last {range}</div>
+        {!usage.isLoading && (data?.daily.length ?? 0) === 0 ? (
+          <p className="empty-hint">Nothing converted in this period yet.</p>
+        ) : (
+          <div className="bar-chart">
+            {(data?.daily ?? []).map((d) => (
+              <div
+                key={d.date}
+                className="bar-chart-bar bar-chart-bar-active"
+                style={{ height: `${Math.round((d.count / busiest) * 100)}%` }}
+                title={`${d.date}: ${d.count}`}
+              />
+            ))}
+          </div>
+        )}
       </div>
+
+      <div className="card">
+        <div className="card-title">Most used operations · Last {range}</div>
+        {!usage.isLoading && (data?.top_operations.length ?? 0) === 0 ? (
+          <p className="empty-hint">No operations run in this period yet.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Operation</th>
+                  <th>Runs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data?.top_operations ?? []).map((o) => (
+                  <tr key={o.operation}>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{o.operation}</td>
+                    <td>{o.count.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+interface TileProps {
+  label: string
+  value: string
+  caption: string
+  icon: 'convert' | 'upload' | 'usage' | 'database'
+}
+
+function Tile({ label, value, caption, icon }: TileProps) {
+  return (
+    <div className="stat-tile">
+      <div className="stat-tile-top">
+        <span className="stat-tile-label">{label}</span>
+        <span className="stat-tile-icon">
+          <Icon name={icon} size={16} />
+        </span>
+      </div>
+      <div className="stat-tile-value">{value}</div>
+      <div className="stat-tile-caption">{caption}</div>
     </div>
   )
 }

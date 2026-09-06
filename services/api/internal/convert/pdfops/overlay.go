@@ -11,8 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	// Registers the decoders DecodeConfig needs to read intrinsic image
-	// dimensions. Blank imports: only the side effect is wanted.
+	// Decoders for DecodeConfig, which reads intrinsic image dimensions.
 	_ "image/jpeg"
 	_ "image/png"
 
@@ -21,39 +20,20 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert"
 )
 
-// OverlayProcessor stamps user-placed elements - typed text, and images such
-// as a drawn signature - onto an existing PDF. This is deliberately overlay
-// editing, not content editing: the original page content is left completely
-// untouched underneath, and elements are composited on top.
+// OverlayProcessor composites text and images onto an existing PDF, leaving
+// the original page content untouched. It does not edit existing text -
+// neither pdfcpu nor fpdf can do that.
 //
-// Editing the *existing* text of a PDF is a genuinely different problem
-// (extracting text runs, re-flowing paragraphs, subsetting fonts) that
-// neither pdfcpu nor fpdf can do, so it isn't attempted here. Everything
-// this supports - add text, sign, stamp, redact - is overlay work, which is
-// also what the great majority of "edit this PDF" actually means in practice.
-//
-// Each element is applied as its own pdfcpu stamp pass, chaining through
-// temp files. That costs one rewrite per element rather than building a
-// composite overlay document, which is the right trade for the handful of
-// elements a person places by hand, and it reuses the same well-trodden
-// stamping path as WatermarkProcessor instead of hand-rolling PDF content
-// streams.
+// Each element is a separate pdfcpu stamp pass, chained through temp files.
 type OverlayProcessor struct{}
 
-// maxElements bounds the per-element rewrite cost, and maxImageBytes bounds
-// what arrives inline in Options. A drawn signature PNG is a few KB; a
-// megabyte of base64 in a queue message is a mistake, not a signature.
 const (
 	maxElements   = 50
-	maxImageBytes = 2 << 20 // 2 MiB decoded
+	maxImageBytes = 2 << 20
 )
 
-// OverlayElement is one placed item.
-//
-// X/Y are PDF points measured from the bottom-left of the page, and address
-// the element's own bottom-left corner - pdfcpu's "position:bl, offset:x y"
-// anchors a stamp's bounding box exactly that way, so the frontend's
-// coordinates survive to the page with no reinterpretation in between.
+// OverlayElement is one placed item. X/Y are PDF points from the bottom-left
+// of the page, addressing the element's own bottom-left corner.
 type OverlayElement struct {
 	Type string  `json:"type"` // "text" or "image"
 	Page int     `json:"page"` // 1-based
@@ -62,14 +42,13 @@ type OverlayElement struct {
 
 	// Text elements.
 	Text  string  `json:"text,omitempty"`
-	Size  float64 `json:"size,omitempty"`  // font size in points, default 12
+	Size  float64 `json:"size,omitempty"`  // points, default 12
 	Color string  `json:"color,omitempty"` // "#rrggbb" or "r g b", default black
 
-	// Image elements. Data is a data: URI or bare base64 - a drawn signature
-	// arrives straight off a canvas as one.
+	// Image elements. Data is a data: URI or bare base64.
 	Data   string  `json:"data,omitempty"`
-	Width  float64 `json:"width,omitempty"`  // desired width in points
-	Height float64 `json:"height,omitempty"` // reserved; aspect ratio is preserved from Width
+	Width  float64 `json:"width,omitempty"`  // points; height follows the aspect ratio
+	Height float64 `json:"height,omitempty"` // unused
 
 	Rotation float64  `json:"rotation,omitempty"`
 	Opacity  *float64 `json:"opacity,omitempty"` // pointer so 0 stays meaningful
@@ -94,9 +73,7 @@ func (OverlayProcessor) Process(_ context.Context, req convert.ConversionRequest
 
 	dir := filepath.Dir(req.InputPath)
 
-	// Scratch files created along the way - intermediate PDFs and decoded
-	// images - all get removed on the way out. Only the final PDF survives,
-	// and it is the one path the caller is handed.
+	// Intermediate PDFs and decoded images; only the final PDF survives.
 	var scratch []string
 	defer func() {
 		for _, p := range scratch {
@@ -113,8 +90,7 @@ func (OverlayProcessor) Process(_ context.Context, req convert.ConversionRequest
 			return convert.ConversionResult{}, fmt.Errorf("element %d: %w", i, err)
 		}
 
-		// The input to this pass is disposable once the next one exists,
-		// but never the caller's original input file.
+		// Disposable once the next pass exists, but never the caller's input.
 		if current != req.InputPath {
 			scratch = append(scratch, current)
 		}
@@ -162,9 +138,8 @@ func applyElement(inPath, outPath string, el OverlayElement, dir string, scratch
 	}
 }
 
-// Parameter names are spelled out in full throughout: pdfcpu matches them by
-// prefix and rejects an ambiguous one (e.g. "sc" matches both scalefactor
-// and scriptname).
+// Parameter names are spelled out in full: pdfcpu matches by prefix and
+// rejects an ambiguous one ("sc" matches both scalefactor and scriptname).
 func textDesc(el OverlayElement) string {
 	size := el.Size
 	if size <= 0 {
@@ -183,8 +158,8 @@ func textDesc(el OverlayElement) string {
 		"offset:" + trimFloat(el.X) + " " + trimFloat(el.Y),
 		"rotation:" + trimFloat(el.Rotation),
 		"opacity:" + trimFloat(opacityOf(el)),
-		// A stamp is scaled relative to the page by default, which would
-		// silently resize text away from the requested point size.
+		// Default scaling is relative to the page, which would resize text
+		// away from the requested point size.
 		"scalefactor:1 absolute",
 	}
 	return strings.Join(parts, ", ")
@@ -192,9 +167,8 @@ func textDesc(el OverlayElement) string {
 
 func imageDesc(el OverlayElement, imgPath string) (string, error) {
 	// pdfcpu sizes an image stamp from its pixel dimensions taken as points,
-	// so a requested width in points becomes a scale factor against the
-	// intrinsic width. Height follows from the aspect ratio - letting both
-	// be set independently would distort a signature, which is never wanted.
+	// so a width in points becomes a scale factor against the intrinsic
+	// width. Height follows the aspect ratio rather than distorting.
 	scale := 1.0
 	if el.Width > 0 {
 		f, err := os.Open(imgPath)
@@ -235,8 +209,8 @@ func opacityOf(el OverlayElement) float64 {
 	return *el.Opacity
 }
 
-// decodeImage turns a data: URI (or bare base64) into a real file on disk,
-// which is what pdfcpu's image stamping takes.
+// decodeImage writes a data: URI (or bare base64) to disk, which is what
+// pdfcpu's image stamping takes.
 func decodeImage(data, dir string) (string, error) {
 	if strings.TrimSpace(data) == "" {
 		return "", fmt.Errorf("data is required for an image element")
@@ -282,8 +256,6 @@ func decodeImage(data, dir string) (string, error) {
 	return path, nil
 }
 
-// trimFloat keeps the description string readable ("72" not "72.000000") -
-// pdfcpu parses either, but these strings end up in error messages and logs.
 func trimFloat(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }

@@ -26,12 +26,13 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/quota"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/ratelimit"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/usage"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/users"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/webhooks"
 )
 
 // Deps is what the router needs from main. It's a struct rather than a long
-// parameter list because Phase 5 added four more collaborators and positional
+// parameter list because there are enough collaborators that positional
 // arguments stopped being readable.
 type Deps struct {
 	Logger       *slog.Logger
@@ -79,6 +80,8 @@ func NewRouter(d Deps) http.Handler {
 
 	batchesRepo := batches.NewRepository(d.Pool)
 	batchesHandler := handlers.NewBatchesHandler(batchesRepo, jobsRepo, fileRepo, d.Store, registry, d.Producer, d.Quota, d.Audit)
+
+	usageHandler := handlers.NewUsageHandler(usage.NewRepository(d.Pool))
 
 	apiKeysService := apikeys.NewService(apikeys.NewRepository(d.Pool))
 	apiKeysHandler := handlers.NewAPIKeysHandler(apiKeysService, d.Audit)
@@ -138,6 +141,8 @@ func NewRouter(d Deps) http.Handler {
 		r.Delete("/files/{id}", filesHandler.Delete)
 
 		r.Post("/convert", convertHandler.Convert)
+
+		r.Get("/usage", usageHandler.Get)
 
 		// The presigned upload path only exists on the S3 backend; on local
 		// storage there is nothing to presign and POST /files stays the

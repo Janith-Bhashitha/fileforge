@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { MeResponse, ShellContext } from '../components/AppShell'
 import { useDeveloperMode } from '../lib/developerMode'
 import { Switch } from '../components/Switch'
+import { PasswordInput } from '../components/PasswordInput'
 import { api, ApiError, assetUrl } from '../lib/api'
 import { useToast } from '../components/Toast'
 
@@ -143,26 +144,31 @@ export function SettingsPage() {
         <div className="card-title">Change Password</div>
         <div className="field-row">
           <label htmlFor="current-password">Current Password</label>
-          <input
+          <PasswordInput
             id="current-password"
-            type="password"
             value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
+            onChange={setCurrentPassword}
+            autoComplete="current-password"
           />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div className="field-row" style={{ marginBottom: 0 }}>
             <label htmlFor="new-password">New Password</label>
-            <input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            <PasswordInput
+              id="new-password"
+              value={newPassword}
+              onChange={setNewPassword}
+              autoComplete="new-password"
+            />
             {passwordTooShort && <span style={{ fontSize: 12, color: 'var(--error)' }}>At least 8 characters</span>}
           </div>
           <div className="field-row" style={{ marginBottom: 0 }}>
             <label htmlFor="confirm-password">Confirm New Password</label>
-            <input
+            <PasswordInput
               id="confirm-password"
-              type="password"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={setConfirmPassword}
+              autoComplete="new-password"
             />
             {passwordsMismatch && <span style={{ fontSize: 12, color: 'var(--error)' }}>Passwords don't match</span>}
           </div>

@@ -15,7 +15,7 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/validate"
 )
 
-// PresignHandler implements the Phase 6 upload path: the browser asks for a
+// PresignHandler implements the direct-to-S3 upload path: the browser asks for a
 // short-lived URL, PUTs the bytes straight to object storage, then tells the
 // API the upload landed. File bytes never pass through the API at all, which
 // is what makes it cheap to run several small API replicas.

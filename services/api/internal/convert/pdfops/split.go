@@ -12,8 +12,7 @@ import (
 )
 
 // SplitProcessor splits a PDF into one file per page and returns a ZIP of
-// the results (Phase 2 keeps this synchronous and single-output; a real
-// multi-output batch flow arrives in Phase 4).
+// the results. Synchronous and single-output; batch handles the rest.
 type SplitProcessor struct{}
 
 func (SplitProcessor) Process(_ context.Context, req convert.ConversionRequest) (convert.ConversionResult, error) {

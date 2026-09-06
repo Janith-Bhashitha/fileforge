@@ -1,7 +1,6 @@
-// Package aiclient wraps the Gemini API for the one thing FileForge needs
-// from an LLM: turning a document's extracted text into a summary,
-// classification and tags. It is the only part of the AI feature set that
-// costs anything (a request against Google's quota) or leaves the machine.
+// Package aiclient wraps the Gemini API, turning a document's extracted text
+// into a summary, classification and tags. It is the only part of the AI
+// feature set that leaves the machine or costs quota.
 package aiclient
 
 import (
@@ -15,9 +14,8 @@ import (
 	"time"
 )
 
-// ErrNotConfigured is returned by every method when no API key is set, so
-// callers can show "AI features need configuring" instead of a raw HTTP
-// error - the difference between a missing feature and a broken one.
+// ErrNotConfigured is returned when no API key is set, so callers can tell
+// a missing feature from a broken one.
 var ErrNotConfigured = fmt.Errorf("AI features are not configured: set GEMINI_API_KEY")
 
 type Client struct {
@@ -36,9 +34,8 @@ func New(apiKey, model string) *Client {
 	return &Client{
 		apiKey: apiKey,
 		model:  model,
-		// Summarizing a long document can take a few seconds of model time;
-		// the default client timeout (none) would otherwise hang a worker
-		// forever against a stalled connection.
+		// A long document takes a few seconds of model time, and the default
+		// (no timeout) would hang a worker against a stalled connection.
 		httpClient: &http.Client{Timeout: 45 * time.Second},
 	}
 }

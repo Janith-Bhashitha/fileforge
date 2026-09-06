@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { api, ApiError } from '../lib/api'
 import { AuthLayout } from '../components/AuthLayout'
+import { PasswordInput } from '../components/PasswordInput'
 import '../components/Form.css'
 
 export function ResetPasswordPage() {
@@ -68,24 +69,24 @@ export function ResetPasswordPage() {
         )}
         <div className="field">
           <label htmlFor="new-password">New Password</label>
-          <input
+          <PasswordInput
             id="new-password"
-            type="password"
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
+            onChange={setNewPassword}
             placeholder="Password"
+            autoComplete="new-password"
             required
           />
           {tooShort && <span style={{ fontSize: 12, color: 'var(--error)' }}>At least 8 characters</span>}
         </div>
         <div className="field">
           <label htmlFor="confirm-password">Confirm Password</label>
-          <input
+          <PasswordInput
             id="confirm-password"
-            type="password"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            onChange={setConfirmPassword}
             placeholder="Confirm password"
+            autoComplete="new-password"
             required
           />
           {mismatch && <span style={{ fontSize: 12, color: 'var(--error)' }}>Passwords don't match</span>}
