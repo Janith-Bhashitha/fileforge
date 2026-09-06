@@ -1,8 +1,5 @@
 # FileForge
 
-AI-powered, all-in-one file conversion & processing platform.
-# FileForge
-
 [![CI](https://github.com/Janith-Bhashitha/fileforge/actions/workflows/ci.yml/badge.svg)](https://github.com/Janith-Bhashitha/fileforge/actions/workflows/ci.yml)
 
 An all-in-one file conversion and processing platform — convert, batch process, extract intelligence from, and edit documents, all behind a public REST API.
