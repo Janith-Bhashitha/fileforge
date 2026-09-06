@@ -124,7 +124,7 @@ func (h *BatchesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	failedSoFar := 0
 	for _, fh := range fileHeaders {
 		if !h.processOneUpload(r, claims.UserID, batch.ID, operation, version, options, fh) {
-			_ = h.repo.IncrementFailed(r.Context(), batch.ID)
+			_, _ = h.repo.IncrementFailed(r.Context(), batch.ID)
 			failedSoFar++
 		}
 	}
@@ -164,7 +164,7 @@ func (h *BatchesHandler) processOneUpload(r *http.Request, ownerID, batchID uuid
 		return false
 	}
 
-	key, err := h.store.Save(r.Context(), data, filepath.Ext(fh.Filename))
+	key, err := h.store.Save(r.Context(), ownerID, data, filepath.Ext(fh.Filename))
 	if err != nil {
 		return false
 	}

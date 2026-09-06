@@ -1,5 +1,5 @@
 output "app_url" {
-  description = "Where the app will be reachable. Allow ~10 minutes after apply: the instance builds all four images on first boot, which is slow on a t3.micro."
+  description = "Where the app will be reachable. Allow a few minutes after apply: the instance pulls the six service images and runs migrations on first boot."
   value       = "http://${aws_eip.app.public_ip}"
 }
 

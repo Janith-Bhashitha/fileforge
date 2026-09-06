@@ -44,6 +44,7 @@ func BuildRegistry(geminiClient *aiclient.Client) *convert.Registry {
 	reg.Register("pdf-remove-pages", "v1", pdfops.RemovePagesProcessor{})
 	reg.Register("pdf-extract-pages", "v1", pdfops.ExtractPagesProcessor{})
 	reg.Register("pdf-watermark", "v1", pdfops.WatermarkProcessor{})
+	reg.Register("pdf-overlay", "v1", pdfops.OverlayProcessor{})
 	reg.Register("pdf-protect", "v1", pdfops.ProtectProcessor{})
 	reg.Register("pdf-unlock", "v1", pdfops.UnlockProcessor{})
 	reg.Register("ocr", "v1", aiops.OCRProcessor{})

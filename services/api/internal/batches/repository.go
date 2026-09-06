@@ -43,9 +43,14 @@ func (r *Repository) GetByID(ctx context.Context, id, ownerID uuid.UUID) (*Batch
 // status recompute in one atomic UPDATE, so concurrent workers finishing
 // items from the same batch at the same time can never race each other
 // into an inconsistent count (Postgres's row-level lock on the UPDATE
-// serializes them).
-func (r *Repository) IncrementCompleted(ctx context.Context, id uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, `
+// serializes them). Each returns the resulting status so the caller can
+// tell, race-free, whether *this* increment was the one that pushed the
+// batch into a terminal state - the row lock means only one increment
+// can ever observe that transition, which is what makes it safe to fire
+// a "batch finished" webhook from here without double-sending it.
+func (r *Repository) IncrementCompleted(ctx context.Context, id uuid.UUID) (string, error) {
+	var status string
+	err := r.pool.QueryRow(ctx, `
 		UPDATE batches
 		SET completed = completed + 1,
 		    updated_at = now(),
@@ -54,14 +59,16 @@ func (r *Repository) IncrementCompleted(ctx context.Context, id uuid.UUID) error
 		            CASE WHEN failed = 0 THEN 'completed' ELSE 'partially_completed' END
 		        ELSE 'processing'
 		    END
-		WHERE id = $1`,
+		WHERE id = $1
+		RETURNING status`,
 		id,
-	)
-	return err
+	).Scan(&status)
+	return status, err
 }
 
-func (r *Repository) IncrementFailed(ctx context.Context, id uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, `
+func (r *Repository) IncrementFailed(ctx context.Context, id uuid.UUID) (string, error) {
+	var status string
+	err := r.pool.QueryRow(ctx, `
 		UPDATE batches
 		SET failed = failed + 1,
 		    updated_at = now(),
@@ -70,10 +77,11 @@ func (r *Repository) IncrementFailed(ctx context.Context, id uuid.UUID) error {
 		            CASE WHEN completed = 0 THEN 'failed' ELSE 'partially_completed' END
 		        ELSE 'processing'
 		    END
-		WHERE id = $1`,
+		WHERE id = $1
+		RETURNING status`,
 		id,
-	)
-	return err
+	).Scan(&status)
+	return status, err
 }
 
 // ResetForRetry undoes count worth of failed increments and puts the batch

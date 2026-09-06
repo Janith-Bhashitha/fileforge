@@ -73,6 +73,20 @@ RETENTION_DAYS=7
 DOCKERHUB_USERNAME=${dockerhub_username}
 GEMINI_API_KEY=${gemini_api_key}
 GEMINI_MODEL=${gemini_model}
+# Password reset. FRONTEND_URL is what the emailed reset link points at, and
+# it defaults to http://localhost:5173 when unset - which on a deployed box
+# produces links that only work on the machine that generated them. It is
+# the instance's own public address here, so a link works from anywhere.
+#
+# The SMTP block is optional: left empty the API logs the reset link instead
+# of sending it, which is a working (if manual) fallback rather than an
+# outage.
+FRONTEND_URL=${frontend_url}
+SMTP_HOST=${smtp_host}
+SMTP_PORT=${smtp_port}
+SMTP_USERNAME=${smtp_username}
+SMTP_PASSWORD=${smtp_password}
+SMTP_FROM=${smtp_from}
 ENVEOF
 chmod 600 "$APP_DIR/.env"
 
@@ -154,12 +168,38 @@ chmod +x /etc/cron.daily/fileforge-cleanup
 # Nightly redeploy: pulls whatever CI most recently pushed to main and
 # restarts anything that changed. `up -d` only recreates containers whose
 # image actually changed, so most nights this is a no-op.
+#
+# Migrations run here too, and that is not optional. user_data only ever
+# executes on first boot, so without this step a redeploy pulls images built
+# from newer code and starts them against the schema the box was born with -
+# the new code's tables simply don't exist, and every request touching them
+# fails at runtime. Migrations are applied BEFORE the new containers start,
+# against the already-running Postgres, so the schema is never behind the
+# code that expects it.
+#
+# `migrate up` is idempotent: on a night when nothing new landed it finds no
+# pending migrations and exits 0, which is why this is safe to run daily.
 cat > /etc/cron.daily/fileforge-redeploy <<'REDEOF'
 #!/bin/bash
+set -euo pipefail
 cd /opt/fileforge
+
+COMPOSE="docker compose -f docker-compose.yml -f docker-compose.ec2.yml"
+
 git pull --ff-only
-docker compose -f docker-compose.yml -f docker-compose.ec2.yml pull
-docker compose -f docker-compose.yml -f docker-compose.ec2.yml up -d
+$COMPOSE pull
+
+# Postgres must be up to migrate against; it normally already is.
+$COMPOSE up -d postgres redis
+for i in $(seq 1 30); do
+  if docker exec "$(docker ps -qf name=postgres)" pg_isready -U fileforge; then break; fi
+  sleep 2
+done
+
+migrate -path /opt/fileforge/services/api/migrations \
+  -database "postgres://fileforge:${postgres_password}@localhost:5433/fileforge?sslmode=disable" up
+
+$COMPOSE up -d
 docker image prune -f
 REDEOF
 chmod +x /etc/cron.daily/fileforge-redeploy

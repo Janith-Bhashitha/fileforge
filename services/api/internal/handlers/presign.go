@@ -45,7 +45,8 @@ type presignResponse struct {
 }
 
 func (h *PresignHandler) Presign(w http.ResponseWriter, r *http.Request) {
-	if _, ok := auth.ClaimsFromContext(r.Context()); !ok {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -63,7 +64,7 @@ func (h *PresignHandler) Presign(w http.ResponseWriter, r *http.Request) {
 	// Only the extension is taken from the caller's filename, and even that
 	// goes into a UUID-based key — the name itself never becomes part of the
 	// object key, so it can't be used to traverse or enumerate.
-	url, key, err := h.store.PresignPut(r.Context(), filepath.Ext(req.Filename), presignTTL)
+	url, key, err := h.store.PresignPut(r.Context(), claims.UserID, filepath.Ext(req.Filename), presignTTL)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to presign upload")
 		return

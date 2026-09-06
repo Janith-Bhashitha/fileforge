@@ -17,6 +17,7 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/queue"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/quota"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/webhooks"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/workerconsumer"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/workerhealth"
 )
@@ -88,6 +89,7 @@ func main() {
 		FilesRepo:   files.NewRepository(pool),
 		Store:       store,
 		Quota:       quotaTracker,
+		Webhooks:    webhooks.NewDispatcher(webhooks.NewRepository(pool), logger),
 	}
 
 	go workerhealth.Serve(logger, ":8080")

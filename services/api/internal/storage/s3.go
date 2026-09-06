@@ -102,11 +102,11 @@ func NewS3Store(ctx context.Context, cfg S3Config) (*S3Store, error) {
 	}, nil
 }
 
-// Keys stay fully opaque — a UUID plus extension, never the user's filename.
-// The original name lives in the database, so an object key leaks nothing
-// and can't be guessed or enumerated.
-func (s *S3Store) Save(ctx context.Context, data []byte, ext string) (string, error) {
-	key := uuid.New().String() + ext
+// Keys are built by ObjectKey: an owner prefix plus an opaque UUID, never
+// the user's filename. The original name lives in the database, so an object
+// key leaks nothing and can't be guessed or enumerated.
+func (s *S3Store) Save(ctx context.Context, ownerID uuid.UUID, data []byte, ext string) (string, error) {
+	key := ObjectKey(ownerID, ext)
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -122,13 +122,13 @@ func (s *S3Store) Save(ctx context.Context, data []byte, ext string) (string, er
 // bucket the scratch copy is removed, since nothing reads from local disk
 // under this backend. (LocalStore's SaveFile keeps the file, because there
 // the file *is* the stored object.)
-func (s *S3Store) SaveFile(ctx context.Context, localPath string) (string, error) {
+func (s *S3Store) SaveFile(ctx context.Context, ownerID uuid.UUID, localPath string) (string, error) {
 	f, err := os.Open(localPath)
 	if err != nil {
 		return "", fmt.Errorf("open produced file: %w", err)
 	}
 
-	key := uuid.New().String() + filepath.Ext(localPath)
+	key := ObjectKey(ownerID, filepath.Ext(localPath))
 	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -147,6 +147,14 @@ func (s *S3Store) SaveFile(ctx context.Context, localPath string) (string, error
 // deletes it. Callers must defer the cleanup: scratch files are the one
 // thing that silently fills a disk.
 func (s *S3Store) Fetch(ctx context.Context, key string) (string, func(), error) {
+	// The key decides where the scratch copy is written locally, and one
+	// caller (ServeAvatar) takes it straight from a public URL - so a key
+	// that climbs out of WorkDir has to be refused before Create, not
+	// after.
+	if err := safeKey(key); err != nil {
+		return "", func() {}, err
+	}
+
 	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -156,7 +164,14 @@ func (s *S3Store) Fetch(ctx context.Context, key string) (string, func(), error)
 	}
 	defer out.Body.Close()
 
-	localPath := filepath.Join(s.workDir, key)
+	// The key contains an owner prefix, so the scratch path is nested - the
+	// directory has to exist before Create, which it did not need to when
+	// keys were a flat UUID.
+	localPath := filepath.Join(s.workDir, filepath.FromSlash(key))
+	if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
+		return "", func() {}, fmt.Errorf("create scratch dir: %w", err)
+	}
+
 	f, err := os.Create(localPath)
 	if err != nil {
 		return "", func() {}, fmt.Errorf("create scratch file: %w", err)
@@ -184,8 +199,8 @@ func (s *S3Store) Delete(ctx context.Context, key string) error {
 // PresignPut gives the browser a short-lived URL to upload straight to S3,
 // so file bytes never pass through the API at all. PresignGet does the same
 // for downloads.
-func (s *S3Store) PresignPut(ctx context.Context, ext string, ttl time.Duration) (url, key string, err error) {
-	key = uuid.New().String() + ext
+func (s *S3Store) PresignPut(ctx context.Context, ownerID uuid.UUID, ext string, ttl time.Duration) (url, key string, err error) {
+	key = ObjectKey(ownerID, ext)
 	req, err := s.presign.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),

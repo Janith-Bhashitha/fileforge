@@ -9,8 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 )
+
+// Every object belongs to someone: keys are namespaced by owner, so the
+// tests need an owner to write as. A fresh one per test keeps runs from
+// colliding in a shared bucket.
+func testOwner() uuid.UUID { return uuid.New() }
 
 // These run against MinIO, which speaks the S3 API, so the exact code path
 // that will talk to AWS is what gets exercised — no AWS account, no mocks.
@@ -50,8 +57,9 @@ func TestS3RoundTrip(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
 
+	owner := testOwner()
 	content := []byte("hello from fileforge")
-	key, err := store.Save(ctx, content, ".txt")
+	key, err := store.Save(ctx, owner, content, ".txt")
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -63,6 +71,11 @@ func TestS3RoundTrip(t *testing.T) {
 	// The key must not leak anything about the original file.
 	if strings.Contains(key, "hello") {
 		t.Errorf("key %q leaks content", key)
+	}
+	// Objects live under their owner's prefix, which is what makes a bucket
+	// browsable per user and per-account deletion a prefix operation.
+	if want := "users/" + owner.String() + "/"; !strings.HasPrefix(key, want) {
+		t.Errorf("key %q should start with %q", key, want)
 	}
 
 	localPath, cleanup, err := store.Fetch(ctx, key)
@@ -94,7 +107,7 @@ func TestS3SaveFileConsumesLocalCopy(t *testing.T) {
 		t.Fatalf("write produced file: %v", err)
 	}
 
-	key, err := store.SaveFile(ctx, produced)
+	key, err := store.SaveFile(ctx, testOwner(), produced)
 	if err != nil {
 		t.Fatalf("SaveFile: %v", err)
 	}
@@ -114,7 +127,7 @@ func TestS3DeleteRemovesObject(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
 
-	key, err := store.Save(ctx, []byte("temporary"), ".txt")
+	key, err := store.Save(ctx, testOwner(), []byte("temporary"), ".txt")
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -132,7 +145,7 @@ func TestS3PresignedUploadBypassesAPI(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
 
-	url, key, err := store.PresignPut(ctx, ".txt", 5*time.Minute)
+	url, key, err := store.PresignPut(ctx, testOwner(), ".txt", 5*time.Minute)
 	if err != nil {
 		t.Fatalf("PresignPut: %v", err)
 	}
@@ -171,7 +184,7 @@ func TestS3PresignedGetIsTimeLimited(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
 
-	key, err := store.Save(ctx, []byte("downloadable"), ".txt")
+	key, err := store.Save(ctx, testOwner(), []byte("downloadable"), ".txt")
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}

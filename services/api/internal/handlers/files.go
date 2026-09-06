@@ -76,7 +76,7 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	sum := sha256.Sum256(data)
 	checksum := hex.EncodeToString(sum[:])
 
-	key, err := h.store.Save(r.Context(), data, filepath.Ext(header.Filename))
+	key, err := h.store.Save(r.Context(), claims.UserID, data, filepath.Ext(header.Filename))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to store file")
 		return

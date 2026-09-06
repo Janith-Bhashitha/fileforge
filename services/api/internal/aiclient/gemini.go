@@ -51,11 +51,26 @@ type Analysis struct {
 	Tags     []string `json:"tags"`
 }
 
+// summarySpecs maps the length a caller asked for to concrete prompt
+// wording. Left as a fixed set (not a free-text length request) so the
+// output stays predictable regardless of what a user types.
+var summarySpecs = map[string]string{
+	"short":    "1 sentence, the single most important point only",
+	"detailed": "a thorough summary of 2-3 paragraphs covering all major points, not just the headline",
+}
+
+const defaultSummarySpec = "2-3 sentences"
+
 // Analyze asks Gemini for a summary, a single category label and a handful
 // of tags in one call rather than three, because the free tier's request
 // budget (15/min) is the actual constraint - three calls per document would
 // cut effective throughput to a third for no accuracy benefit.
-func (c *Client) Analyze(ctx context.Context, text string) (*Analysis, error) {
+//
+// length selects how long the summary should be ("short", "detailed", or
+// "" for the default) - the one knob exposed on top of the fixed prompt,
+// since "always gives a short summary" was the one complaint about the
+// fixed version.
+func (c *Client) Analyze(ctx context.Context, text, length string) (*Analysis, error) {
 	if !c.Configured() {
 		return nil, ErrNotConfigured
 	}
@@ -67,9 +82,14 @@ func (c *Client) Analyze(ctx context.Context, text string) (*Analysis, error) {
 		text = string(r[:12000])
 	}
 
+	spec, ok := summarySpecs[length]
+	if !ok {
+		spec = defaultSummarySpec
+	}
+
 	prompt := "You are analyzing a document for a file-management application. " +
 		"Given the document text below, respond with ONLY a JSON object matching this shape " +
-		`(no markdown fences, no commentary): {"summary": string (2-3 sentences), ` +
+		`(no markdown fences, no commentary): {"summary": string (` + spec + `), ` +
 		`"category": string (one of: invoice, contract, letter, report, resume, receipt, form, article, other), ` +
 		`"tags": string[] (3-6 short keywords)}.\n\nDocument text:\n` + text
 

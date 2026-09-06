@@ -76,6 +76,37 @@ variable "gemini_api_key" {
   default     = ""
 }
 
+variable "smtp_host" {
+  description = "SMTP server for password-reset email. Leave the whole SMTP block empty and reset still works - the API logs the reset link instead of emailing it - so this is optional, not required for a working deploy."
+  type        = string
+  default     = "smtp.gmail.com"
+}
+
+variable "smtp_port" {
+  description = "SMTP port. 587 is STARTTLS, which is what Gmail and most providers expect."
+  type        = number
+  default     = 587
+}
+
+variable "smtp_username" {
+  description = "SMTP account to authenticate as. For Gmail this is the full address."
+  type        = string
+  default     = ""
+}
+
+variable "smtp_password" {
+  description = "SMTP password. For Gmail this must be an App Password (myaccount.google.com/apppasswords, needs 2-Step Verification on), NOT the account password. Supply via TF_VAR_smtp_password - never a default, never committed."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "smtp_from" {
+  description = "From address on reset emails. Defaults to smtp_username when empty, matching the API's own fallback."
+  type        = string
+  default     = ""
+}
+
 variable "gemini_model" {
   description = "Gemini model to call. Defaults to the floating Flash-Lite alias rather than a dated model name - Flash-Lite is the tier built for free-tier/high-volume use, and the alias tracks whatever Google currently recommends instead of pointing at a fixed model that gets retired later (gemini-2.0-flash, used earlier in this project, already was)."
   type        = string

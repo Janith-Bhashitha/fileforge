@@ -50,16 +50,16 @@ export function DeveloperOverviewPage() {
 
       <div className="card-row" style={{ marginBottom: 16 }}>
         <div className="card">
-          <div className="code-block-header">POST /v1/jobs</div>
-          <div className="code-block">{`curl -X POST https://api.fileforge.dev/v1/jobs \\
-  -H "Authorization: Bearer ff_live_..." \\
+          <div className="code-block-header">POST /api/v1/jobs</div>
+          <div className="code-block">{`curl -X POST https://YOUR-HOST/api/v1/jobs \\
+  -H "X-API-Key: ffk_..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "file_id": "file_01J9A3kx",
-    "operation": "pdf_to_images",
+    "file_id": "8f14e45f-ceea-4e0a-9d2b-1a3b5c7d9e01",
+    "operation": "pdf-to-image",
+    "version": "v1",
     "options": {
-      "format": "jpg",
-      "quality": 90
+      "format": "jpeg"
     }
   }'`}</div>
         </div>

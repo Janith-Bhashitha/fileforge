@@ -20,7 +20,7 @@ export function LoginPage() {
     mutationFn: () => api.post<LoginResponse>('/api/auth/login', { email, password }),
     onSuccess: (data) => {
       login(data.token)
-      navigate('/', { replace: true })
+      navigate('/dashboard', { replace: true })
     },
   })
 
@@ -52,18 +52,23 @@ export function LoginPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            placeholder="Email address"
             required
           />
         </div>
         <div className="field">
-          <label htmlFor="password">Password</label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <label htmlFor="password">Password</label>
+            <Link to="/forgot-password" style={{ fontSize: 13 }}>
+              Forgot password?
+            </Link>
+          </div>
           <input
             id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
+            placeholder="Password"
             required
           />
         </div>

@@ -24,39 +24,96 @@ interface OperationConfig {
   prompts?: OptionPrompt[]
 }
 
-const operations: OperationConfig[] = [
-  { label: 'JPG/PNG → PDF', operation: 'image-to-pdf', accept: 'image/jpeg,image/png' },
-  { label: 'PDF → JPG', operation: 'pdf-to-image', options: { format: 'jpeg' }, accept: 'application/pdf' },
-  { label: 'PDF → PNG', operation: 'pdf-to-image', options: { format: 'png' }, accept: 'application/pdf' },
-  { label: 'DOCX → PDF', operation: 'docx-to-pdf', accept: '.docx' },
-  { label: 'PPTX → PDF', operation: 'pptx-to-pdf', accept: '.pptx' },
-  { label: 'XLSX → PDF', operation: 'xlsx-to-pdf', accept: '.xlsx' },
-  { label: 'TXT → PDF', operation: 'txt-to-pdf', accept: '.txt' },
-  { label: 'Compress PDF', operation: 'pdf-compress', accept: 'application/pdf' },
-  { label: 'Split PDF', operation: 'pdf-split', accept: 'application/pdf' },
-  { label: 'JPG → PNG', operation: 'image-convert', options: { format: 'png' }, accept: 'image/jpeg' },
-  { label: 'PNG → JPG', operation: 'image-convert', options: { format: 'jpeg' }, accept: 'image/png' },
-  { label: 'Resize Image', operation: 'image-resize', options: { max_width: '1200' }, accept: 'image/*' },
-  { label: 'Rotate PDF', operation: 'pdf-rotate', options: { angle: '90' }, accept: 'application/pdf' },
+interface OperationCategory {
+  label: string
+  operations: OperationConfig[]
+}
+
+// Same grouping as the Convert page, minus Merge - a batch applies one
+// operation independently to N files and produces N outputs, while merging
+// is N files becoming exactly one output, a different job shape the batch
+// backend (one job_item per input file) doesn't model. Merge stays on the
+// Convert page, which already supports true multi-input operations.
+const categories: OperationCategory[] = [
   {
-    label: 'Watermark PDF',
-    operation: 'pdf-watermark',
-    accept: 'application/pdf',
-    prompts: [{ key: 'text', label: 'Watermark text', placeholder: 'CONFIDENTIAL' }],
+    label: 'Convert to PDF',
+    operations: [
+      { label: 'JPG/PNG → PDF', operation: 'image-to-pdf', accept: 'image/jpeg,image/png' },
+      { label: 'DOCX → PDF', operation: 'docx-to-pdf', accept: '.docx' },
+      { label: 'PPTX → PDF', operation: 'pptx-to-pdf', accept: '.pptx' },
+      { label: 'XLSX → PDF', operation: 'xlsx-to-pdf', accept: '.xlsx' },
+      { label: 'TXT → PDF', operation: 'txt-to-pdf', accept: '.txt' },
+    ],
   },
   {
-    label: 'Protect PDF',
-    operation: 'pdf-protect',
-    accept: 'application/pdf',
-    prompts: [{ key: 'password', label: 'Password', placeholder: 'Choose a password', type: 'password' }],
+    label: 'Convert from PDF',
+    operations: [
+      { label: 'PDF → JPG', operation: 'pdf-to-image', options: { format: 'jpeg' }, accept: 'application/pdf' },
+      { label: 'PDF → PNG', operation: 'pdf-to-image', options: { format: 'png' }, accept: 'application/pdf' },
+    ],
   },
   {
-    label: 'Unlock PDF',
-    operation: 'pdf-unlock',
-    accept: 'application/pdf',
-    prompts: [{ key: 'password', label: 'Current password', placeholder: 'Enter the PDF password', type: 'password' }],
+    label: 'Organize PDF',
+    operations: [
+      { label: 'Split PDF', operation: 'pdf-split', accept: 'application/pdf' },
+      { label: 'Rotate PDF', operation: 'pdf-rotate', options: { angle: '90' }, accept: 'application/pdf' },
+      {
+        label: 'Remove Pages',
+        operation: 'pdf-remove-pages',
+        accept: 'application/pdf',
+        prompts: [{ key: 'pages', label: 'Pages to remove (applies to every file)', placeholder: 'e.g. 1,3,5-7' }],
+      },
+      {
+        label: 'Extract Pages',
+        operation: 'pdf-extract-pages',
+        accept: 'application/pdf',
+        prompts: [{ key: 'pages', label: 'Pages to keep (applies to every file)', placeholder: 'e.g. 1,3,5-7' }],
+      },
+    ],
+  },
+  {
+    label: 'Optimize & Secure PDF',
+    operations: [
+      { label: 'Compress PDF', operation: 'pdf-compress', accept: 'application/pdf' },
+      {
+        label: 'Watermark PDF',
+        operation: 'pdf-watermark',
+        accept: 'application/pdf',
+        prompts: [{ key: 'text', label: 'Watermark text', placeholder: 'CONFIDENTIAL' }],
+      },
+      {
+        label: 'Protect PDF',
+        operation: 'pdf-protect',
+        accept: 'application/pdf',
+        prompts: [{ key: 'password', label: 'Password', placeholder: 'Choose a password', type: 'password' }],
+      },
+      {
+        label: 'Unlock PDF',
+        operation: 'pdf-unlock',
+        accept: 'application/pdf',
+        prompts: [{ key: 'password', label: 'Current password', placeholder: 'Enter the PDF password', type: 'password' }],
+      },
+    ],
+  },
+  {
+    label: 'Image Tools',
+    operations: [
+      { label: 'JPG → PNG', operation: 'image-convert', options: { format: 'png' }, accept: 'image/jpeg' },
+      { label: 'PNG → JPG', operation: 'image-convert', options: { format: 'jpeg' }, accept: 'image/png' },
+      { label: 'Resize Image', operation: 'image-resize', options: { max_width: '1200' }, accept: 'image/*' },
+    ],
+  },
+  {
+    label: 'Intelligent Processing',
+    operations: [
+      { label: 'OCR', operation: 'ocr', accept: 'image/*,application/pdf' },
+      { label: 'Document Insights', operation: 'document-insights', accept: '.txt,.md,application/pdf,image/*' },
+      { label: 'AI Analyze', operation: 'ai-analyze', accept: '.txt,.md,application/pdf,image/*' },
+    ],
   },
 ]
+
+const operations: OperationConfig[] = categories.flatMap((c) => c.operations)
 
 interface BatchResponse {
   id: string
@@ -213,18 +270,34 @@ export function BatchProcessingPage() {
 
         <div className="card">
           <div className="card-title">Conversion Type</div>
-          <div className="pill-group">
-            {operations.map((op) => (
-              <button
-                key={op.label}
-                type="button"
-                className={`pill-option ${selectedOp.label === op.label ? 'pill-option-active' : ''}`}
-                onClick={() => handleSelectOperation(op)}
+          {categories.map((category) => (
+            <div key={category.label} style={{ marginBottom: 14 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  color: 'var(--text-muted)',
+                  marginBottom: 8,
+                }}
               >
-                {op.label}
-              </button>
-            ))}
-          </div>
+                {category.label}
+              </div>
+              <div className="pill-group">
+                {category.operations.map((op) => (
+                  <button
+                    key={op.label}
+                    type="button"
+                    className={`pill-option ${selectedOp.label === op.label ? 'pill-option-active' : ''}`}
+                    onClick={() => handleSelectOperation(op)}
+                  >
+                    {op.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
 
         {selectedOp.prompts && selectedOp.prompts.length > 0 && (

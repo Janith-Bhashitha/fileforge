@@ -120,6 +120,17 @@ resource "aws_instance" "app" {
     dockerhub_username = var.dockerhub_username
     gemini_api_key     = var.gemini_api_key
     gemini_model       = var.gemini_model
+
+    # http, not https: the box answers 443 with a self-signed certificate, so
+    # an emailed https link lands the recipient on a browser interstitial.
+    # A full URL with an explicit scheme isn't subject to the HTTPS-First
+    # upgrade that bare typed addresses are, so this stays http end to end.
+    frontend_url  = "http://${aws_eip.app.public_ip}"
+    smtp_host     = var.smtp_host
+    smtp_port     = var.smtp_port
+    smtp_username = var.smtp_username
+    smtp_password = var.smtp_password
+    smtp_from     = var.smtp_from
   })
 
   # Changing user_data on an existing instance does nothing (it only runs on
@@ -132,9 +143,20 @@ resource "aws_instance" "app" {
 # A static address that survives stop/start. Free while attached to a
 # running instance - but AWS charges for an Elastic IP that is allocated
 # and NOT attached, which is the classic surprise line item.
+#
+# The address is allocated on its own and attached separately, rather than
+# with the `instance` argument, because user_data needs to bake the public
+# address into FRONTEND_URL. Associating here would make the EIP depend on
+# the instance while the instance depends on the EIP's address - a cycle
+# Terraform refuses to plan. Allocating first breaks it: the address exists
+# before the instance that gets told about it.
 resource "aws_eip" "app" {
-  instance = aws_instance.app.id
-  domain   = "vpc"
+  domain = "vpc"
 
   tags = { Name = local.name }
+}
+
+resource "aws_eip_association" "app" {
+  instance_id   = aws_instance.app.id
+  allocation_id = aws_eip.app.id
 }

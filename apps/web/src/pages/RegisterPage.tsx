@@ -26,7 +26,7 @@ export function RegisterPage() {
       }),
     onSuccess: (data) => {
       login(data.token)
-      navigate('/', { replace: true })
+      navigate('/dashboard', { replace: true })
     },
   })
 
@@ -58,7 +58,7 @@ export function RegisterPage() {
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Jane Doe"
+            placeholder="Full name"
           />
         </div>
         <div className="field">
@@ -68,7 +68,7 @@ export function RegisterPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            placeholder="Email address"
             required
           />
         </div>
@@ -79,7 +79,7 @@ export function RegisterPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 8 characters"
+            placeholder="Password"
             required
             minLength={8}
           />

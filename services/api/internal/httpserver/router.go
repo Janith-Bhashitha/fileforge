@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/aiclient"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/apikeys"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/audit"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/auth"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/batches"
@@ -19,12 +20,14 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/files"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/handlers"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/jobs"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/mailer"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/metrics"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/queue"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/quota"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/ratelimit"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/users"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/webhooks"
 )
 
 // Deps is what the router needs from main. It's a struct rather than a long
@@ -41,6 +44,12 @@ type Deps struct {
 	Audit        *audit.Recorder
 	GeminiAPIKey string
 	GeminiModel  string
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
+	FrontendURL  string
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -55,7 +64,8 @@ func NewRouter(d Deps) http.Handler {
 
 	userRepo := users.NewRepository(d.Pool)
 	userService := users.NewService(userRepo)
-	authHandler := handlers.NewAuthHandler(userService, d.JWTSecret, d.Audit)
+	mailerClient := mailer.New(d.SMTPHost, d.SMTPPort, d.SMTPUsername, d.SMTPPassword, d.SMTPFrom)
+	authHandler := handlers.NewAuthHandler(userService, d.JWTSecret, d.Audit, mailerClient, d.Store, d.FrontendURL, d.Logger)
 
 	geminiClient := aiclient.New(d.GeminiAPIKey, d.GeminiModel)
 	registry := convertsetup.BuildRegistry(geminiClient)
@@ -70,12 +80,27 @@ func NewRouter(d Deps) http.Handler {
 	batchesRepo := batches.NewRepository(d.Pool)
 	batchesHandler := handlers.NewBatchesHandler(batchesRepo, jobsRepo, fileRepo, d.Store, registry, d.Producer, d.Quota, d.Audit)
 
+	apiKeysService := apikeys.NewService(apikeys.NewRepository(d.Pool))
+	apiKeysHandler := handlers.NewAPIKeysHandler(apiKeysService, d.Audit)
+
+	webhooksRepo := webhooks.NewRepository(d.Pool)
+	webhooksDispatcher := webhooks.NewDispatcher(webhooksRepo, d.Logger)
+	webhooksHandler := handlers.NewWebhooksHandler(webhooksRepo, webhooksDispatcher, d.Audit)
+
+	// Everything under /api/v1 accepts either an API key or a JWT, which is
+	// what makes this a public API rather than only a backend for its own
+	// frontend - the web app happens to always send a JWT, but nothing here
+	// requires that.
+	apiAuth := auth.APIKeyOrJWTMiddleware(d.JWTSecret, apiKeysService)
+
 	r.Route("/api/auth", func(r chi.Router) {
 		// Rate limiting matters most here — this is the unauthenticated
 		// surface where credential stuffing would land.
 		r.Use(d.Limiter.Middleware)
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
+		r.Post("/forgot-password", authHandler.ForgotPassword)
+		r.Post("/reset-password", authHandler.ResetPassword)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(d.JWTSecret))
@@ -83,9 +108,29 @@ func NewRouter(d Deps) http.Handler {
 		})
 	})
 
+	// Unauthenticated: an <img> tag can't attach an Authorization header,
+	// and the key is an opaque UUID - see ServeAvatar's doc comment.
+	// Wildcard, not {key}: storage keys are namespaced per owner and so
+	// contain slashes, which a single path parameter will not match.
+	r.Get("/avatars/*", authHandler.ServeAvatar)
+
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(auth.Middleware(d.JWTSecret))
+		r.Use(apiAuth)
 		r.Use(d.Limiter.Middleware)
+
+		r.Patch("/profile", authHandler.UpdateProfile)
+		r.Post("/profile/avatar", authHandler.UploadAvatar)
+		r.Post("/profile/change-password", authHandler.ChangePassword)
+
+		r.Post("/api-keys", apiKeysHandler.Create)
+		r.Get("/api-keys", apiKeysHandler.List)
+		r.Delete("/api-keys/{id}", apiKeysHandler.Revoke)
+
+		r.Post("/webhooks", webhooksHandler.Create)
+		r.Get("/webhooks", webhooksHandler.List)
+		r.Delete("/webhooks/{id}", webhooksHandler.Delete)
+		r.Get("/webhooks/{id}/deliveries", webhooksHandler.ListDeliveries)
+		r.Post("/webhooks/{id}/test", webhooksHandler.SendTest)
 
 		r.Get("/files", filesHandler.List)
 		r.Post("/files", filesHandler.Upload)

@@ -126,7 +126,7 @@ func (h *ConvertHandler) Convert(w http.ResponseWriter, r *http.Request) {
 		size = info.Size()
 	}
 
-	outputKey, err := h.store.SaveFile(r.Context(), result.OutputPath)
+	outputKey, err := h.store.SaveFile(r.Context(), claims.UserID, result.OutputPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to store output file")
 		return

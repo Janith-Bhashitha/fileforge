@@ -82,6 +82,12 @@ func main() {
 		Audit:        audit.NewRecorder(pool, logger),
 		GeminiAPIKey: cfg.GeminiAPIKey,
 		GeminiModel:  cfg.GeminiModel,
+		SMTPHost:     cfg.SMTPHost,
+		SMTPPort:     cfg.SMTPPort,
+		SMTPUsername: cfg.SMTPUsername,
+		SMTPPassword: cfg.SMTPPassword,
+		SMTPFrom:     cfg.SMTPFrom,
+		FrontendURL:  cfg.FrontendURL,
 	})
 
 	logger.Info("starting server",

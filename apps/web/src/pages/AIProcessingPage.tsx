@@ -17,6 +17,13 @@ interface Analysis {
 }
 
 type Status = 'idle' | 'uploading' | 'processing' | 'done' | 'error' | 'not-configured'
+type SummaryLength = 'short' | 'default' | 'detailed'
+
+const lengthOptions: { value: SummaryLength; label: string }[] = [
+  { value: 'short', label: 'Short (1 sentence)' },
+  { value: 'default', label: 'Default (2-3 sentences)' },
+  { value: 'detailed', label: 'Detailed (multi-paragraph)' },
+]
 
 const categoryColors: Record<string, string> = {
   invoice: 'purple',
@@ -34,6 +41,7 @@ export function AIProcessingPage() {
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState('')
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
+  const [length, setLength] = useState<SummaryLength>('default')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function reset() {
@@ -58,6 +66,7 @@ export function AIProcessingPage() {
         file_id: uploaded.id,
         operation: 'ai-analyze',
         version: 'v1',
+        options: length === 'default' ? {} : { summary_length: length },
       })
 
       const blob = await api.downloadBlob(`/api/v1/files/${result.id}/download`)
@@ -81,6 +90,22 @@ export function AIProcessingPage() {
         <div>
           <h1>AI Processing</h1>
           <p>Summarize, classify and tag documents using Gemini.</p>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Summary Length</div>
+        <div className="pill-group">
+          {lengthOptions.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              className={`pill-option ${length === opt.value ? 'pill-option-active' : ''}`}
+              onClick={() => setLength(opt.value)}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
 

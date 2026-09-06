@@ -36,6 +36,20 @@ type Config struct {
 	// app refusing to start - the rest of FileForge doesn't depend on it.
 	GeminiAPIKey string
 	GeminiModel  string
+
+	// Password reset email. Left unconfigured, RequestPasswordReset still
+	// works but the handler logs the reset link instead of emailing it -
+	// same "degrade, don't break" pattern as GeminiAPIKey.
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
+
+	// Where the frontend actually lives, so a password-reset email can link
+	// to a real page (http://localhost:5173/reset-password?token=... in
+	// dev, the deployed origin in production) instead of guessing.
+	FrontendURL string
 }
 
 func Load() (*Config, error) {
@@ -73,6 +87,12 @@ func Load() (*Config, error) {
 		S3SecretKey:        os.Getenv("S3_SECRET_ACCESS_KEY"),
 		GeminiAPIKey:       os.Getenv("GEMINI_API_KEY"),
 		GeminiModel:        getEnv("GEMINI_MODEL", "gemini-flash-lite-latest"),
+		SMTPHost:           os.Getenv("SMTP_HOST"),
+		SMTPPort:           getEnv("SMTP_PORT", "587"),
+		SMTPUsername:       os.Getenv("SMTP_USERNAME"),
+		SMTPPassword:       os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:           getEnv("SMTP_FROM", os.Getenv("SMTP_USERNAME")),
+		FrontendURL:        getEnv("FRONTEND_URL", "http://localhost:5173"),
 	}, nil
 }
 

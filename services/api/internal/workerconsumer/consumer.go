@@ -27,6 +27,7 @@ import (
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/queue"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/quota"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/storage"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/webhooks"
 )
 
 type Runner struct {
@@ -42,6 +43,7 @@ type Runner struct {
 	FilesRepo   *files.Repository
 	Store       storage.Store
 	Quota       *quota.Tracker
+	Webhooks    *webhooks.Dispatcher
 }
 
 // Run blocks forever, consuming messages from r.Stream until ctx is
@@ -140,25 +142,25 @@ func (r *Runner) handleMessage(ctx context.Context, msg redis.XMessage) {
 
 	inputFileID, err := uuid.Parse(qmsg.InputFileID)
 	if err != nil {
-		r.failItem(ctx, item, "invalid input file id", logger)
+		r.failItem(ctx, item, qmsg.Operation, "invalid input file id", logger)
 		return
 	}
 
 	inputFile, err := r.FilesRepo.GetByIDAny(ctx, inputFileID)
 	if err != nil {
-		r.failItem(ctx, item, "input file not found: "+err.Error(), logger)
+		r.failItem(ctx, item, qmsg.Operation, "input file not found: "+err.Error(), logger)
 		return
 	}
 
 	processor, err := r.Registry.Resolve(qmsg.Operation, qmsg.Version)
 	if err != nil {
-		r.failItem(ctx, item, err.Error(), logger)
+		r.failItem(ctx, item, qmsg.Operation, err.Error(), logger)
 		return
 	}
 
 	inputPath, releaseInput, err := r.Store.Fetch(ctx, inputFile.StorageKey)
 	if err != nil {
-		r.failItem(ctx, item, "failed to fetch input file: "+err.Error(), logger)
+		r.failItem(ctx, item, qmsg.Operation, "failed to fetch input file: "+err.Error(), logger)
 		return
 	}
 	defer releaseInput()
@@ -181,9 +183,9 @@ func (r *Runner) handleMessage(ctx context.Context, msg redis.XMessage) {
 		size = info.Size()
 	}
 
-	outputKey, err := r.Store.SaveFile(ctx, result.OutputPath)
+	outputKey, err := r.Store.SaveFile(ctx, inputFile.OwnerID, result.OutputPath)
 	if err != nil {
-		r.failItem(ctx, item, "failed to store output: "+err.Error(), logger)
+		r.failItem(ctx, item, qmsg.Operation, "failed to store output: "+err.Error(), logger)
 		return
 	}
 
@@ -202,12 +204,12 @@ func (r *Runner) handleMessage(ctx context.Context, msg redis.XMessage) {
 	}
 
 	if err := r.FilesRepo.Create(ctx, outputFile); err != nil {
-		r.failItem(ctx, item, "failed to save output file: "+err.Error(), logger)
+		r.failItem(ctx, item, qmsg.Operation, "failed to save output file: "+err.Error(), logger)
 		return
 	}
 
 	_ = r.JobsRepo.UpdateItem(ctx, item.ID, jobs.StatusCompleted, &outputFile.ID, nil, false)
-	r.markParentCompleted(ctx, item)
+	r.markParentCompleted(ctx, item, inputFile.OwnerID, qmsg.Operation, outputFile.ID)
 	r.releaseQuota(ctx, inputFile.OwnerID)
 	metrics.JobItemsProcessed.WithLabelValues(qmsg.Operation, jobs.StatusCompleted).Inc()
 
@@ -222,7 +224,7 @@ func (r *Runner) handleMessage(ctx context.Context, msg redis.XMessage) {
 func (r *Runner) retryOrFail(ctx context.Context, item *jobs.JobItem, qmsg queue.Message, errMsg string, logger *slog.Logger) {
 	attempts := item.Attempts + 1
 	if attempts >= jobs.MaxAttempts {
-		r.failItem(ctx, item, errMsg, logger)
+		r.failItem(ctx, item, qmsg.Operation, errMsg, logger)
 		return
 	}
 
@@ -236,22 +238,27 @@ func (r *Runner) retryOrFail(ctx context.Context, item *jobs.JobItem, qmsg queue
 
 	if err := r.Producer.Enqueue(ctx, qmsg); err != nil {
 		logger.Error("failed to re-enqueue after retry backoff", "error", err)
-		r.failItem(ctx, item, "failed to re-enqueue: "+err.Error(), logger)
+		r.failItem(ctx, item, qmsg.Operation, "failed to re-enqueue: "+err.Error(), logger)
 	}
 }
 
-func (r *Runner) failItem(ctx context.Context, item *jobs.JobItem, errMsg string, logger *slog.Logger) {
+func (r *Runner) failItem(ctx context.Context, item *jobs.JobItem, operation, errMsg string, logger *slog.Logger) {
 	logger.Error("job item failed permanently", "error", errMsg)
 	_ = r.JobsRepo.UpdateItem(ctx, item.ID, jobs.StatusFailed, nil, &errMsg, true)
-	r.markParentFailed(ctx, item, errMsg)
-	metrics.JobItemsProcessed.WithLabelValues("unknown", jobs.StatusFailed).Inc()
+	metrics.JobItemsProcessed.WithLabelValues(operation, jobs.StatusFailed).Inc()
 
 	// The owner is only reachable via the input file, so a failure that
-	// happened before that lookup succeeded can't release a slot here -
-	// the cleanup sweep reconciles those.
-	if inputFile, err := r.FilesRepo.GetByIDAny(ctx, item.InputFileID); err == nil {
-		r.releaseQuota(ctx, inputFile.OwnerID)
+	// happened before that lookup succeeded can't release a slot or fire a
+	// webhook here - the cleanup sweep reconciles the quota slot, and there
+	// is simply no owner to notify in that narrow window.
+	inputFile, err := r.FilesRepo.GetByIDAny(ctx, item.InputFileID)
+	if err != nil {
+		r.markParentFailed(ctx, item, uuid.Nil, operation, errMsg)
+		return
 	}
+
+	r.markParentFailed(ctx, item, inputFile.OwnerID, operation, errMsg)
+	r.releaseQuota(ctx, inputFile.OwnerID)
 }
 
 // releaseQuota hands a slot back when an item reaches a terminal state.
@@ -277,23 +284,53 @@ func (r *Runner) markParentProcessing(ctx context.Context, item *jobs.JobItem) {
 	// status only ever recomputes when an item finishes.
 }
 
-func (r *Runner) markParentCompleted(ctx context.Context, item *jobs.JobItem) {
+func (r *Runner) markParentCompleted(ctx context.Context, item *jobs.JobItem, ownerID uuid.UUID, operation string, outputFileID uuid.UUID) {
 	if item.JobID != nil {
 		_ = r.JobsRepo.UpdateJobStatus(ctx, *item.JobID, jobs.StatusCompleted, nil)
 		_ = r.JobsRepo.UpdateJobProgress(ctx, *item.JobID, 100)
+		r.dispatch(ctx, ownerID, webhooks.EventJobCompleted, map[string]any{
+			"job_id": item.JobID, "operation": operation, "output_file_id": outputFileID,
+		})
 		return
 	}
 	if item.BatchID != nil {
-		_ = r.BatchesRepo.IncrementCompleted(ctx, *item.BatchID)
+		status, err := r.BatchesRepo.IncrementCompleted(ctx, *item.BatchID)
+		if err == nil && isTerminalBatchStatus(status) {
+			r.dispatch(ctx, ownerID, webhooks.EventBatchCompleted, map[string]any{
+				"batch_id": item.BatchID, "status": status,
+			})
+		}
 	}
 }
 
-func (r *Runner) markParentFailed(ctx context.Context, item *jobs.JobItem, errMsg string) {
+func (r *Runner) markParentFailed(ctx context.Context, item *jobs.JobItem, ownerID uuid.UUID, operation, errMsg string) {
 	if item.JobID != nil {
 		_ = r.JobsRepo.UpdateJobStatus(ctx, *item.JobID, jobs.StatusFailed, &errMsg)
+		r.dispatch(ctx, ownerID, webhooks.EventJobFailed, map[string]any{
+			"job_id": item.JobID, "operation": operation, "error": errMsg,
+		})
 		return
 	}
 	if item.BatchID != nil {
-		_ = r.BatchesRepo.IncrementFailed(ctx, *item.BatchID)
+		status, err := r.BatchesRepo.IncrementFailed(ctx, *item.BatchID)
+		if err == nil && isTerminalBatchStatus(status) {
+			r.dispatch(ctx, ownerID, webhooks.EventBatchCompleted, map[string]any{
+				"batch_id": item.BatchID, "status": status,
+			})
+		}
 	}
+}
+
+func isTerminalBatchStatus(status string) bool {
+	return status == batches.StatusCompleted || status == batches.StatusPartiallyComplete || status == batches.StatusFailed
+}
+
+// dispatch is a nil-safe wrapper: workers can run without a webhook
+// dispatcher configured, and uuid.Nil means the owner genuinely couldn't be
+// determined (see failItem) - neither should be an error, just a no-op.
+func (r *Runner) dispatch(ctx context.Context, ownerID uuid.UUID, eventType string, data any) {
+	if r.Webhooks == nil || ownerID == uuid.Nil {
+		return
+	}
+	r.Webhooks.Send(ctx, ownerID, eventType, data)
 }

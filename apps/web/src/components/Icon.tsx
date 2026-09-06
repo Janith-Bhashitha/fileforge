@@ -30,6 +30,10 @@ export type IconName =
   | 'copy'
   | 'chevron'
   | 'x'
+  | 'menu'
+  | 'signature'
+  | 'edit'
+  | 'arrow-right'
 
 interface IconProps {
   name: IconName
@@ -264,6 +268,32 @@ export function Icon({ name, size = 18 }: IconProps) {
       return (
         <svg {...common}>
           <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      )
+    case 'arrow-right':
+      return (
+        <svg {...common}>
+          <path d="M5 12h14M13 5l7 7-7 7" />
+        </svg>
+      )
+    case 'menu':
+      return (
+        <svg {...common}>
+          <path d="M3 6h18M3 12h18M3 18h18" />
+        </svg>
+      )
+    case 'signature':
+      return (
+        <svg {...common}>
+          <path d="M3 17c2-4 4-6 6-6s2 4 4 4 2-6 4-6 2 3 4 3" />
+          <path d="M3 21h18" />
+        </svg>
+      )
+    case 'edit':
+      return (
+        <svg {...common}>
+          <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
         </svg>
       )
     default:

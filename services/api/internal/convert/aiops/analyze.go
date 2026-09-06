@@ -38,7 +38,7 @@ func (p AIAnalyzeProcessor) Process(ctx context.Context, req convert.ConversionR
 		return convert.ConversionResult{}, fmt.Errorf("document has too little extractable text to analyze")
 	}
 
-	analysis, err := p.Client.Analyze(ctx, text)
+	analysis, err := p.Client.Analyze(ctx, text, req.Options["summary_length"])
 	if err != nil {
 		return convert.ConversionResult{}, err
 	}

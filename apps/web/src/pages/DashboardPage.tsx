@@ -38,7 +38,7 @@ export function DashboardPage() {
     <div>
       <h1 className="dash-title">
         {greeting()}
-        {me?.email ? `, ${me.email.split('@')[0]}` : ''}
+        {me?.display_name ? `, ${me.display_name}` : ''}
       </h1>
       <p className="dash-subtitle">Convert, batch process and manage your files.</p>
 
