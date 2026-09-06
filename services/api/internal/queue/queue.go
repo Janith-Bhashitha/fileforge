@@ -42,6 +42,9 @@ var StreamForOperation = map[string]string{
 	"pdf-watermark":     "stream:pdf",
 	"pdf-protect":       "stream:pdf",
 	"pdf-unlock":        "stream:pdf",
+	"ocr":               "stream:ai",
+	"document-insights": "stream:ai",
+	"ai-analyze":        "stream:ai",
 }
 
 type Producer struct {

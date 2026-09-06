@@ -30,6 +30,12 @@ type Config struct {
 	S3ForcePathStyle bool
 	S3AccessKeyID    string
 	S3SecretKey      string
+
+	// AI features. OCR and Document Insights need no key; only ai-analyze
+	// does. Left empty, ai-analyze fails clearly per-request rather than the
+	// app refusing to start - the rest of FileForge doesn't depend on it.
+	GeminiAPIKey string
+	GeminiModel  string
 }
 
 func Load() (*Config, error) {
@@ -65,6 +71,8 @@ func Load() (*Config, error) {
 		S3ForcePathStyle:   os.Getenv("S3_FORCE_PATH_STYLE") == "true",
 		S3AccessKeyID:      os.Getenv("S3_ACCESS_KEY_ID"),
 		S3SecretKey:        os.Getenv("S3_SECRET_ACCESS_KEY"),
+		GeminiAPIKey:       os.Getenv("GEMINI_API_KEY"),
+		GeminiModel:        getEnv("GEMINI_MODEL", "gemini-3.6-flash"),
 	}, nil
 }
 

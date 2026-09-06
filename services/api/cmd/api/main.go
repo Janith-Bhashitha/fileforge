@@ -69,17 +69,19 @@ func main() {
 	}
 
 	go metrics.WatchQueueDepth(ctx, logger, cfg.RedisURL,
-		[]string{"stream:pdf", "stream:image", "stream:office"}, 15*time.Second)
+		[]string{"stream:pdf", "stream:image", "stream:office", "stream:ai"}, 15*time.Second)
 
 	router := httpserver.NewRouter(httpserver.Deps{
-		Logger:    logger,
-		Pool:      pool,
-		JWTSecret: cfg.JWTSecret,
-		Store:     store,
-		Producer:  producer,
-		Limiter:   limiter,
-		Quota:     quotaTracker,
-		Audit:     audit.NewRecorder(pool, logger),
+		Logger:       logger,
+		Pool:         pool,
+		JWTSecret:    cfg.JWTSecret,
+		Store:        store,
+		Producer:     producer,
+		Limiter:      limiter,
+		Quota:        quotaTracker,
+		Audit:        audit.NewRecorder(pool, logger),
+		GeminiAPIKey: cfg.GeminiAPIKey,
+		GeminiModel:  cfg.GeminiModel,
 	})
 
 	logger.Info("starting server",

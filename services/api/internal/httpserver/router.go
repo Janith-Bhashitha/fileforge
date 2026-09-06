@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/aiclient"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/audit"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/auth"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/batches"
@@ -30,14 +31,16 @@ import (
 // parameter list because Phase 5 added four more collaborators and positional
 // arguments stopped being readable.
 type Deps struct {
-	Logger    *slog.Logger
-	Pool      *pgxpool.Pool
-	JWTSecret string
-	Store     storage.Store
-	Producer  *queue.Producer
-	Limiter   *ratelimit.Limiter
-	Quota     *quota.Tracker
-	Audit     *audit.Recorder
+	Logger       *slog.Logger
+	Pool         *pgxpool.Pool
+	JWTSecret    string
+	Store        storage.Store
+	Producer     *queue.Producer
+	Limiter      *ratelimit.Limiter
+	Quota        *quota.Tracker
+	Audit        *audit.Recorder
+	GeminiAPIKey string
+	GeminiModel  string
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -54,7 +57,8 @@ func NewRouter(d Deps) http.Handler {
 	userService := users.NewService(userRepo)
 	authHandler := handlers.NewAuthHandler(userService, d.JWTSecret, d.Audit)
 
-	registry := convertsetup.BuildRegistry()
+	geminiClient := aiclient.New(d.GeminiAPIKey, d.GeminiModel)
+	registry := convertsetup.BuildRegistry(geminiClient)
 
 	fileRepo := files.NewRepository(d.Pool)
 	filesHandler := handlers.NewFilesHandler(fileRepo, d.Store, d.Audit)

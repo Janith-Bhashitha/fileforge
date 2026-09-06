@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useOutletContext } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 import { api } from '../lib/api'
 import { Icon } from '../components/Icon'
 import type { ShellContext } from '../components/AppShell'
@@ -17,7 +17,9 @@ function greeting(): string {
   return 'Good evening'
 }
 
-const upcomingOperations = [
+// A sample of what the Convert page offers, not the full list - the point is
+// to give someone landing here a way in, not to duplicate the whole menu.
+const quickActions = [
   { from: 'JPG', to: 'PDF', label: 'Image → PDF' },
   { from: 'PDF', to: 'JPG', label: 'PDF → Image' },
   { from: 'DOCX', to: 'PDF', label: 'Word → PDF' },
@@ -38,7 +40,7 @@ export function DashboardPage() {
         {greeting()}
         {me?.email ? `, ${me.email.split('@')[0]}` : ''}
       </h1>
-      <p className="dash-subtitle">Your account is connected. File conversion tools arrive in Phase 2.</p>
+      <p className="dash-subtitle">Convert, batch process and manage your files.</p>
 
       <div className="status-grid">
         <StatCard
@@ -64,20 +66,22 @@ export function DashboardPage() {
 
       <div className="upcoming-card">
         <div className="upcoming-header">
-          <h2 className="upcoming-title">Coming in Phase 2</h2>
-          <span className="upcoming-badge">Locked</span>
+          <h2 className="upcoming-title">Quick actions</h2>
+          <Link to="/convert" className="upcoming-badge">
+            All tools
+          </Link>
         </div>
         <div className="upcoming-grid">
-          {upcomingOperations.map((op) => (
-            <div className="upcoming-tile" key={op.label}>
-              <Icon name="lock" size={16} />
+          {quickActions.map((op) => (
+            <Link className="upcoming-tile" key={op.label} to="/convert">
+              <Icon name="convert" size={16} />
               <div>
                 <span className="upcoming-tile-types">
                   {op.from} <span className="upcoming-arrow">→</span> {op.to}
                 </span>
                 <span className="upcoming-tile-label">{op.label}</span>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

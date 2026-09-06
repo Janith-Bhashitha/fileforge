@@ -6,6 +6,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/aiclient"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/batches"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/config"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convertsetup"
@@ -81,7 +82,7 @@ func main() {
 		Stream:      "stream:image",
 		Group:       "cg:worker-image",
 		Consumer:    hostname,
-		Registry:    convertsetup.BuildRegistry(),
+		Registry:    convertsetup.BuildRegistry(aiclient.New(cfg.GeminiAPIKey, cfg.GeminiModel)),
 		JobsRepo:    jobs.NewRepository(pool),
 		BatchesRepo: batches.NewRepository(pool),
 		FilesRepo:   files.NewRepository(pool),

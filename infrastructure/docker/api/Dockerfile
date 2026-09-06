@@ -9,8 +9,12 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/api ./cmd/api
 # Deployments run it as a scheduled task against this image.
 RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/cleanup ./cmd/cleanup
 
+# tesseract-ocr/tesseract-ocr-data-eng are here because the synchronous
+# /api/v1/convert endpoint runs ocr/document-insights/ai-analyze in-process,
+# same as every other operation - only async job/batch submissions of these
+# reach worker-ai. Both paths need the same tools installed.
 FROM alpine:3.20
-RUN apk add --no-cache libreoffice poppler-utils font-noto ttf-dejavu \
+RUN apk add --no-cache libreoffice poppler-utils font-noto ttf-dejavu tesseract-ocr tesseract-ocr-data-eng \
     && adduser -D -u 1000 appuser \
     && mkdir -p /data/storage \
     && chown -R appuser:appuser /data/storage

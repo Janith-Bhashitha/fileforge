@@ -122,6 +122,8 @@
 }
 
 .upcoming-tile {
+  text-decoration: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -153,4 +155,21 @@
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 2px;
+}
+
+/* The tiles and "All tools" are links now rather than locked placeholders,
+   so they need to look interactive. */
+a.upcoming-tile:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+a.upcoming-badge {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+a.upcoming-badge:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }

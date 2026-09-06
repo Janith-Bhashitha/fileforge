@@ -26,6 +26,11 @@ services:
       retries: 5
 
   api:
+    # image: names the tag `build` produces locally AND what `pull` fetches
+    # in a deploy that never builds at all (docker compose pull, no build flag) -
+    # one name serves both, so local dev and the deployed box can't drift
+    # into using a differently-tagged image by accident.
+    image: ${DOCKERHUB_USERNAME:-fileforge}/fileforge-api:latest
     build:
       context: .
       dockerfile: infrastructure/docker/api/Dockerfile
@@ -45,7 +50,23 @@ services:
       redis:
         condition: service_healthy
 
+  # The frontend, served by nginx, which also proxies /api through to the API
+  # container. Same origin means no CORS and no absolute backend URL baked
+  # into the bundle at build time.
+  web:
+    image: ${DOCKERHUB_USERNAME:-fileforge}/fileforge-web:latest
+    build:
+      context: .
+      dockerfile: infrastructure/docker/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      # Not 3000: Grafana already uses that under the observability profile.
+      - "3001:80"
+    depends_on:
+      - api
+
   worker-pdf:
+    image: ${DOCKERHUB_USERNAME:-fileforge}/fileforge-worker-pdf:latest
     build:
       context: .
       dockerfile: infrastructure/docker/worker-pdf/Dockerfile
@@ -64,6 +85,7 @@ services:
         condition: service_healthy
 
   worker-image:
+    image: ${DOCKERHUB_USERNAME:-fileforge}/fileforge-worker-image:latest
     build:
       context: .
       dockerfile: infrastructure/docker/worker-image/Dockerfile
@@ -82,9 +104,32 @@ services:
         condition: service_healthy
 
   worker-office:
+    image: ${DOCKERHUB_USERNAME:-fileforge}/fileforge-worker-office:latest
     build:
       context: .
       dockerfile: infrastructure/docker/worker-office/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - api_storage:/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ocr, document-insights and ai-analyze - the only worker with an external
+  # dependency (Gemini) instead of just OS packages, and the only one that
+  # fails per-request rather than at startup when unconfigured.
+  worker-ai:
+    image: ${DOCKERHUB_USERNAME:-fileforge}/fileforge-worker-ai:latest
+    build:
+      context: .
+      dockerfile: infrastructure/docker/worker-ai/Dockerfile
     restart: unless-stopped
     env_file:
       - .env

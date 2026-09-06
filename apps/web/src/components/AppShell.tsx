@@ -65,7 +65,6 @@ const systemSection: NavSection = {
   label: 'System',
   items: [
     { path: '/settings', label: 'Settings', icon: 'settings' },
-    { path: '/help', label: 'Help', icon: 'help' },
     { path: '/status', label: 'System Status', icon: 'status' },
   ],
 }

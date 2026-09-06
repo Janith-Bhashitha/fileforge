@@ -63,3 +63,21 @@ variable "billing_alarm_threshold_usd" {
   type        = number
   default     = 5
 }
+
+variable "dockerhub_username" {
+  description = "Docker Hub account CI pushes the 6 service images to. The instance pulls fileforge-<service>:latest from here instead of building anything itself - required for a real deploy, since without it the image: names in docker-compose.yml don't resolve to anything pullable."
+  type        = string
+}
+
+variable "gemini_api_key" {
+  description = "Free-tier key for AI Processing (document summarize/classify). Get one with no credit card at https://aistudio.google.com/apikey. Supply via TF_VAR_gemini_api_key - never a default, never committed. Leave empty and AI Processing fails per-request with a clear \"not configured\" error; OCR and Document Insights need nothing here and work regardless."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "gemini_model" {
+  description = "Gemini model name. Google occasionally retires older model names (gemini-2.0-flash was replaced by gemini-3.6-flash during this project) - override here if the default has since been deprecated."
+  type        = string
+  default     = "gemini-3.6-flash"
+}

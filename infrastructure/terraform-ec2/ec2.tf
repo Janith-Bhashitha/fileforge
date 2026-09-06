@@ -96,12 +96,15 @@ resource "aws_instance" "app" {
   }
 
   user_data = templatefile("${path.module}/user_data.sh", {
-    repo_url          = var.repo_url
-    repo_branch       = var.repo_branch
-    s3_bucket         = aws_s3_bucket.files.id
-    region            = var.region
-    jwt_secret        = random_password.jwt_secret.result
-    postgres_password = random_password.postgres.result
+    repo_url           = var.repo_url
+    repo_branch        = var.repo_branch
+    s3_bucket          = aws_s3_bucket.files.id
+    region             = var.region
+    jwt_secret         = random_password.jwt_secret.result
+    postgres_password  = random_password.postgres.result
+    dockerhub_username = var.dockerhub_username
+    gemini_api_key     = var.gemini_api_key
+    gemini_model       = var.gemini_model
   })
 
   # Changing user_data on an existing instance does nothing (it only runs on

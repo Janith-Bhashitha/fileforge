@@ -1,13 +1,15 @@
 // Package convertsetup wires up the operation registry. It exists as its
 // own package (rather than living in internal/convert itself) because it
 // has to import every processor subpackage (imageops, pdfops, office,
-// txtops), and those subpackages already import internal/convert for the
-// shared Processor/Registry types - putting this here instead of inside
+// txtops, aiops), and those subpackages already import internal/convert for
+// the shared Processor/Registry types - putting this here instead of inside
 // internal/convert avoids a Go import cycle.
 package convertsetup
 
 import (
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/aiclient"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert"
+	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/aiops"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/imageops"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/office"
 	"github.com/Janith-Bhashitha/fileforge/services/api/internal/convert/pdfops"
@@ -18,7 +20,14 @@ import (
 // key. The API (for its synchronous /convert endpoint) and every worker
 // (for its async job processing) call this same function, so there's one
 // place that ever lists what FileForge can do.
-func BuildRegistry() *convert.Registry {
+//
+// geminiClient is threaded in rather than constructed here because it's the
+// one processor with real configuration (an API key) behind it - every
+// other processor is a stateless value type. A nil-safe client (created via
+// aiclient.New with an empty key) is expected when AI features aren't
+// configured; ai-analyze then fails clearly per-request instead of the
+// whole registry refusing to build.
+func BuildRegistry(geminiClient *aiclient.Client) *convert.Registry {
 	reg := convert.NewRegistry()
 	reg.Register("image-to-pdf", "v1", imageops.ImageToPDFProcessor{})
 	reg.Register("pdf-to-image", "v1", imageops.PDFToImageProcessor{})
@@ -37,5 +46,8 @@ func BuildRegistry() *convert.Registry {
 	reg.Register("pdf-watermark", "v1", pdfops.WatermarkProcessor{})
 	reg.Register("pdf-protect", "v1", pdfops.ProtectProcessor{})
 	reg.Register("pdf-unlock", "v1", pdfops.UnlockProcessor{})
+	reg.Register("ocr", "v1", aiops.OCRProcessor{})
+	reg.Register("document-insights", "v1", aiops.InsightsProcessor{})
+	reg.Register("ai-analyze", "v1", aiops.AIAnalyzeProcessor{Client: geminiClient})
 	return reg
 }

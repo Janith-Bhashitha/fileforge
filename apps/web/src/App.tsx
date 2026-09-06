@@ -12,9 +12,9 @@ import { ConvertPage } from './pages/ConvertPage'
 import { BatchProcessingPage } from './pages/BatchProcessingPage'
 import { FilesPage } from './pages/FilesPage'
 import { HistoryPage } from './pages/HistoryPage'
-import { AIProcessingPage } from './pages/AIProcessingPage'
 import { OCRPage } from './pages/OCRPage'
 import { DocumentInsightsPage } from './pages/DocumentInsightsPage'
+import { AIProcessingPage } from './pages/AIProcessingPage'
 import { DeveloperPage } from './pages/DeveloperPage'
 import { DeveloperOverviewPage } from './pages/developer/DeveloperOverviewPage'
 import { DeveloperApiKeysPage } from './pages/developer/DeveloperApiKeysPage'
@@ -22,7 +22,6 @@ import { DeveloperWebhooksPage } from './pages/developer/DeveloperWebhooksPage'
 import { DeveloperUsagePage } from './pages/developer/DeveloperUsagePage'
 import { DeveloperCliPage } from './pages/developer/DeveloperCliPage'
 import { SettingsPage } from './pages/SettingsPage'
-import { HelpPage } from './pages/HelpPage'
 import { SystemStatusPage } from './pages/SystemStatusPage'
 
 const queryClient = new QueryClient()
@@ -60,7 +59,6 @@ function App() {
                   </Route>
 
                   <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="/help" element={<HelpPage />} />
                   <Route path="/status" element={<SystemStatusPage />} />
                 </Route>
               </Route>

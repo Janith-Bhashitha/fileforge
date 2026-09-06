@@ -16,6 +16,7 @@ require (
 )
 
 require (
+	github.com/abadojack/whatlanggo v1.0.1 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.46.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.20 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.33.3 // indirect

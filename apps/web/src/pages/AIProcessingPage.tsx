@@ -1,83 +1,179 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { api, ApiError } from '../lib/api'
 
-const exampleTasks = [
-  'Convert all scanned invoices to searchable PDFs',
-  'OCR these documents and extract key information',
-  'Extract invoice numbers and dates from PDFs',
-  'Rename files based on their content',
-  'Classify these documents by type',
-  'Compress all PDFs to under 1 MB',
-]
+interface FileResponse {
+  id: string
+  filename: string
+  mime_type: string
+  size: number
+}
+
+interface Analysis {
+  summary: string
+  category: string
+  tags: string[]
+  ocr_used: boolean
+}
+
+type Status = 'idle' | 'uploading' | 'processing' | 'done' | 'error' | 'not-configured'
+
+const categoryColors: Record<string, string> = {
+  invoice: 'purple',
+  contract: 'blue',
+  letter: 'teal',
+  report: 'green',
+  resume: 'orange',
+  receipt: 'yellow',
+  form: 'gray',
+  article: 'red',
+}
 
 export function AIProcessingPage() {
-  const [instruction, setInstruction] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [status, setStatus] = useState<Status>('idle')
+  const [error, setError] = useState('')
+  const [analysis, setAnalysis] = useState<Analysis | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function reset() {
+    setFile(null)
+    setStatus('idle')
+    setError('')
+    setAnalysis(null)
+  }
+
+  async function handleRun() {
+    if (!file) return
+    setStatus('uploading')
+    setError('')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const uploaded = await api.upload<FileResponse>('/api/v1/files', formData)
+
+      setStatus('processing')
+      const result = await api.post<FileResponse>('/api/v1/convert', {
+        file_id: uploaded.id,
+        operation: 'ai-analyze',
+        version: 'v1',
+      })
+
+      const blob = await api.downloadBlob(`/api/v1/files/${result.id}/download`)
+      setAnalysis(JSON.parse(await blob.text()))
+      setStatus('done')
+    } catch (err) {
+      if (err instanceof ApiError && err.message.includes('not configured')) {
+        setStatus('not-configured')
+        return
+      }
+      setError(err instanceof ApiError ? err.message : 'Something went wrong')
+      setStatus('error')
+    }
+  }
+
+  const isBusy = status === 'uploading' || status === 'processing'
 
   return (
     <div>
       <div className="page-header">
         <div>
           <h1>AI Processing</h1>
-          <p>Describe what you want to do with your files.</p>
+          <p>Summarize, classify and tag documents using Gemini.</p>
         </div>
       </div>
 
       <div className="card">
-        <div className="dropzone">
+        <div className="dropzone" onClick={() => fileInputRef.current?.click()} style={{ cursor: 'pointer' }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.md,application/pdf,image/*"
+            onChange={(e) => {
+              const selected = e.target.files?.[0]
+              if (selected) {
+                setFile(selected)
+                setStatus('idle')
+                setError('')
+                setAnalysis(null)
+              }
+            }}
+            style={{ display: 'none' }}
+          />
           <div className="dropzone-icon">
             <Icon name="upload" size={20} />
           </div>
-          <div className="dropzone-title">Drop files for AI processing</div>
-          <div className="dropzone-sub">or click to browse</div>
+          <div className="dropzone-title">{file ? file.name : 'Click to choose a document'}</div>
+          <div className="dropzone-sub">
+            {file ? `${(file.size / 1024).toFixed(0)} KB` : 'PDF, TXT, Markdown, or a scanned image'}
+          </div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="field-row">
-          <label htmlFor="instruction">What would you like to do?</label>
-          <textarea
-            id="instruction"
-            rows={3}
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-            placeholder="e.g. Convert all scanned invoices to searchable PDFs, extract invoice number and date, rename the files, and create a ZIP."
-            style={{
-              background: 'var(--surface-2)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)',
-              padding: '12px',
-              fontSize: 14,
-              color: 'var(--text)',
-              resize: 'vertical',
-              fontFamily: 'inherit',
-            }}
-          />
+      {status === 'not-configured' && (
+        <div className="banner banner-warning">
+          AI Processing needs a free Gemini API key to be set on the server (GEMINI_API_KEY). Get one at{' '}
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
+            aistudio.google.com
+          </a>{' '}
+          — no credit card required.
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            AI will generate a plan for your review before processing begins.
-          </p>
-          <button className="btn-primary" type="button" disabled>
-            <Icon name="sparkles" size={14} /> Process with AI — Phase 8
+      )}
+
+      {error && (
+        <div className="form-error" style={{ marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
+
+      {!analysis && status !== 'not-configured' && (
+        <div className="card">
+          <button
+            className="btn-primary"
+            type="button"
+            style={{ width: '100%' }}
+            disabled={!file || isBusy}
+            onClick={handleRun}
+          >
+            {status === 'uploading' ? 'Uploading…' : status === 'processing' ? 'Analyzing with Gemini…' : 'Analyze'}
           </button>
         </div>
-      </div>
+      )}
 
-      <div className="card">
-        <div className="card-title">Example tasks</div>
-        <div className="pill-group">
-          {exampleTasks.map((task) => (
-            <button
-              key={task}
-              type="button"
-              className="pill-option"
-              onClick={() => setInstruction(task)}
-            >
-              {task}
+      {analysis && (
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div className="card-title" style={{ marginBottom: 0 }}>
+              Analysis
+            </div>
+            <button className="btn-secondary" type="button" onClick={reset}>
+              New Document
             </button>
-          ))}
+          </div>
+
+          {analysis.ocr_used && (
+            <div className="banner banner-info">This document had no text layer, so it was read via OCR first.</div>
+          )}
+
+          <div style={{ marginBottom: 16 }}>
+            <span className={`file-type-icon file-type-icon-${categoryColors[analysis.category] ?? 'gray'}`}>
+              {analysis.category.slice(0, 3).toUpperCase()}
+            </span>
+            <span style={{ marginLeft: 10, fontWeight: 600, textTransform: 'capitalize' }}>{analysis.category}</span>
+          </div>
+
+          <p style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>{analysis.summary}</p>
+
+          <div className="pill-group">
+            {analysis.tags.map((tag) => (
+              <span className="pill-option" key={tag} style={{ cursor: 'default' }}>
+                {tag}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
