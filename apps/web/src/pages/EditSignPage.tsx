@@ -56,12 +56,20 @@ export function EditSignPage() {
 
   const [signature, setSignature] = useState<string | null>(null)
   const [signatureWidth, setSignatureWidth] = useState(160)
+  const [signatureMode, setSignatureMode] = useState<'draw' | 'upload'>('draw')
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // pdf.js rejects a render that starts while another is running on the
   // same context.
   const renderTaskRef = useRef<pdfjsLib.RenderTask | null>(null)
+
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  // A ref, not state: pointermove fires on every pixel of movement, and this
+  // only needs to survive between events, not trigger a render itself.
+  const dragRef = useRef<{ id: string; startPointerX: number; startPointerY: number; startElX: number; startElY: number } | null>(
+    null
+  )
 
   function resetDocument() {
     setPdfDoc(null)
@@ -118,18 +126,27 @@ export function EditSignPage() {
     return () => renderTaskRef.current?.cancel()
   }, [renderPage])
 
-  // The canvas may be laid out smaller than its backing store, so the click
-  // is taken as a fraction of the displayed box, not a raw client offset.
+  // The canvas may be laid out smaller than its backing store, so a client
+  // coordinate is taken as a fraction of the displayed box, not a raw
+  // offset. Shared by placement and dragging so both agree on where the
+  // pointer actually is in PDF points.
+  function pdfPointFromClient(clientX: number, clientY: number) {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const rect = canvas.getBoundingClientRect()
+    const xCanvas = ((clientX - rect.left) / rect.width) * pageSize.width
+    const yCanvas = ((clientY - rect.top) / rect.height) * pageSize.height
+    return {
+      x: xCanvas / RENDER_SCALE,
+      // Canvas y grows downward, PDF y grows upward from the bottom.
+      y: (pageSize.height - yCanvas) / RENDER_SCALE,
+    }
+  }
+
   function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!pdfDoc) return
 
-    const rect = e.currentTarget.getBoundingClientRect()
-    const xCanvas = ((e.clientX - rect.left) / rect.width) * pageSize.width
-    const yCanvas = ((e.clientY - rect.top) / rect.height) * pageSize.height
-
-    const x = xCanvas / RENDER_SCALE
-    // Canvas y grows downward, PDF y grows upward from the bottom.
-    const y = (pageSize.height - yCanvas) / RENDER_SCALE
+    const { x, y } = pdfPointFromClient(e.clientX, e.clientY)
 
     if (tool === 'text') {
       if (!textValue.trim()) {
@@ -151,6 +168,34 @@ export function EditSignPage() {
       ...prev,
       { id: crypto.randomUUID(), type: 'image', page: pageNumber, x, y, data: signature, width: signatureWidth },
     ])
+  }
+
+  // Drag-to-move for an already-placed element. Pointer capture keeps the
+  // move/up events targeted at this element even once the pointer leaves
+  // its (small) bounding box, which a fast drag does constantly.
+  function handleElementPointerDown(e: ReactPointerEvent<HTMLDivElement>, el: OverlayElement) {
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const start = pdfPointFromClient(e.clientX, e.clientY)
+    dragRef.current = { id: el.id, startPointerX: start.x, startPointerY: start.y, startElX: el.x, startElY: el.y }
+    setDraggingId(el.id)
+  }
+
+  function handleElementPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current
+    if (!drag) return
+    const current = pdfPointFromClient(e.clientX, e.clientY)
+    const x = drag.startElX + (current.x - drag.startPointerX)
+    const y = drag.startElY + (current.y - drag.startPointerY)
+    setElements((prev) => prev.map((item) => (item.id === drag.id ? { ...item, x, y } : item)))
+  }
+
+  function handleElementPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    dragRef.current = null
+    setDraggingId(null)
   }
 
   async function handleApply() {
@@ -294,16 +339,54 @@ export function EditSignPage() {
                 </div>
               </>
             ) : (
-              <SignaturePad
-                signature={signature}
-                width={signatureWidth}
-                onWidthChange={setSignatureWidth}
-                onChange={setSignature}
-              />
+              <>
+                <div className="pill-group" style={{ marginBottom: 12 }}>
+                  <button
+                    type="button"
+                    className={`pill-option ${signatureMode === 'draw' ? 'pill-option-active' : ''}`}
+                    onClick={() => setSignatureMode('draw')}
+                  >
+                    Draw
+                  </button>
+                  <button
+                    type="button"
+                    className={`pill-option ${signatureMode === 'upload' ? 'pill-option-active' : ''}`}
+                    onClick={() => setSignatureMode('upload')}
+                  >
+                    Upload image
+                  </button>
+                </div>
+
+                {signatureMode === 'draw' ? (
+                  <SignaturePad onChange={setSignature} />
+                ) : (
+                  <SignatureUpload signature={signature} onChange={setSignature} />
+                )}
+
+                <div className="field-row" style={{ marginTop: 12 }}>
+                  <label htmlFor="sig-width">Width on page (pt)</label>
+                  <input
+                    id="sig-width"
+                    type="number"
+                    min={40}
+                    max={400}
+                    value={signatureWidth}
+                    onChange={(e) => setSignatureWidth(Number(e.target.value) || 160)}
+                  />
+                </div>
+
+                {!signature && (
+                  <p className="editsign-hint">
+                    {signatureMode === 'draw' ? 'Draw a signature above' : 'Upload an image above'}, then click the
+                    page to place it.
+                  </p>
+                )}
+              </>
             )}
 
             <p className="editsign-hint">
-              Click anywhere on the page to place the {tool === 'text' ? 'text' : 'signature'}.
+              Click anywhere on the page to place the {tool === 'text' ? 'text' : 'signature'} — placed items can be
+              dragged to reposition them.
             </p>
 
             <div className="card-title" style={{ marginTop: 20 }}>
@@ -384,22 +467,30 @@ export function EditSignPage() {
             <div className="editsign-canvas-wrap">
               <canvas ref={canvasRef} className="editsign-canvas" onClick={handleCanvasClick} />
               {/* Previews use the same bottom-left space as the API, so this
-                  is where the element actually lands. */}
+                  is where the element actually lands. Draggable: pointer
+                  events are enabled here (the CSS default for the class is
+                  otherwise none, so a click that misses every element still
+                  reaches the canvas and places a new one). */}
               {pageElements.map((el) => (
                 <div
                   key={el.id}
-                  className="editsign-placed"
+                  className={`editsign-placed ${draggingId === el.id ? 'editsign-placed-dragging' : ''}`}
                   style={{
                     left: `${(el.x * RENDER_SCALE * 100) / (pageSize.width || 1)}%`,
                     bottom: `${(el.y * RENDER_SCALE * 100) / (pageSize.height || 1)}%`,
                   }}
+                  onPointerDown={(e) => handleElementPointerDown(e, el)}
+                  onPointerMove={handleElementPointerMove}
+                  onPointerUp={handleElementPointerUp}
+                  onPointerCancel={handleElementPointerUp}
+                  title="Drag to move"
                 >
                   {el.type === 'text' ? (
                     <span style={{ fontSize: (el.size ?? 12) * RENDER_SCALE, color: el.color, lineHeight: 1 }}>
                       {el.text}
                     </span>
                   ) : (
-                    <img src={el.data} alt="" style={{ width: (el.width ?? 160) * RENDER_SCALE }} />
+                    <img src={el.data} alt="" draggable={false} style={{ width: (el.width ?? 160) * RENDER_SCALE }} />
                   )}
                 </div>
               ))}
@@ -412,16 +503,13 @@ export function EditSignPage() {
 }
 
 interface SignaturePadProps {
-  signature: string | null
-  width: number
-  onWidthChange: (width: number) => void
   onChange: (dataUrl: string | null) => void
 }
 
 // A plain pointer-driven scribble pad. The stroke is captured at the canvas's
 // own resolution and exported as a PNG data URI, which is exactly what the
 // API's image element takes - no upload round-trip for something this small.
-function SignaturePad({ signature, width, onWidthChange, onChange }: SignaturePadProps) {
+function SignaturePad({ onChange }: SignaturePadProps) {
   const padRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
 
@@ -473,40 +561,130 @@ function SignaturePad({ signature, width, onWidthChange, onChange }: SignaturePa
   }
 
   return (
-    <>
-      <div className="field-row">
-        {/* htmlFor can't target a <canvas>, so the name lives on the canvas. */}
-        <span className="field-row-caption">Draw your signature</span>
-        <canvas
-          ref={padRef}
-          width={360}
-          height={140}
-          className="editsign-pad"
-          role="img"
-          aria-label="Signature drawing area"
-          onPointerDown={start}
-          onPointerMove={move}
-          onPointerUp={end}
-          onPointerLeave={end}
-        />
-      </div>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-        <div className="field-row" style={{ flex: 1, marginBottom: 0 }}>
-          <label htmlFor="sig-width">Width on page (pt)</label>
-          <input
-            id="sig-width"
-            type="number"
-            min={40}
-            max={400}
-            value={width}
-            onChange={(e) => onWidthChange(Number(e.target.value) || 160)}
-          />
+    <div className="field-row">
+      {/* htmlFor can't target a <canvas>, so the name lives on the canvas. */}
+      <span className="field-row-caption">Draw your signature</span>
+      <canvas
+        ref={padRef}
+        width={360}
+        height={140}
+        className="editsign-pad"
+        role="img"
+        aria-label="Signature drawing area"
+        onPointerDown={start}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerLeave={end}
+      />
+      <button className="btn-secondary" type="button" style={{ alignSelf: 'flex-start' }} onClick={clear}>
+        Clear
+      </button>
+    </div>
+  )
+}
+
+interface SignatureUploadProps {
+  signature: string | null
+  onChange: (dataUrl: string | null) => void
+}
+
+// Turns an uploaded signature photo into an overlay-ready PNG. Almost every
+// real-world signature photo is ink on white or off-white paper; without
+// this a JPEG upload would stamp an opaque white rectangle onto the page
+// instead of just the signature.
+function SignatureUpload({ signature, onChange }: SignatureUploadProps) {
+  const [removeBackground, setRemoveBackground] = useState(true)
+  const rawImageRef = useRef<HTMLImageElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const process = useCallback(
+    (image: HTMLImageElement, matte: boolean) => {
+      // Capped well under the API's 2 MiB decoded-image limit - a phone
+      // photo at full resolution has no business being that large anyway.
+      const maxDim = 800
+      const scale = Math.min(1, maxDim / Math.max(image.naturalWidth, image.naturalHeight))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(image.naturalWidth * scale)
+      canvas.height = Math.round(image.naturalHeight * scale)
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+
+      if (matte) {
+        // A flat brightness threshold, not real matting - good enough for
+        // ink on paper, not meant for a busy or textured background.
+        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        const data = frame.data
+        for (let i = 0; i < data.length; i += 4) {
+          const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3
+          if (brightness > 235) data[i + 3] = 0
+        }
+        ctx.putImageData(frame, 0, 0)
+      }
+
+      onChange(canvas.toDataURL('image/png'))
+    },
+    [onChange]
+  )
+
+  function handleFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      rawImageRef.current = img
+      process(img, removeBackground)
+      URL.revokeObjectURL(objectUrl)
+    }
+    img.src = objectUrl
+  }
+
+  function toggleRemoveBackground(next: boolean) {
+    setRemoveBackground(next)
+    if (rawImageRef.current) process(rawImageRef.current, next)
+  }
+
+  function clear() {
+    rawImageRef.current = null
+    onChange(null)
+  }
+
+  return (
+    <div className="field-row">
+      <span className="field-row-caption">Upload a signature image</span>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg"
+        style={{ display: 'none' }}
+        onChange={handleFile}
+      />
+
+      {signature ? (
+        <div className="editsign-upload-preview">
+          <img src={signature} alt="Uploaded signature" />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-secondary" type="button" onClick={() => fileInputRef.current?.click()}>
+              Replace
+            </button>
+            <button className="btn-secondary" type="button" onClick={clear}>
+              Clear
+            </button>
+          </div>
         </div>
-        <button className="btn-secondary" type="button" onClick={clear}>
-          Clear
+      ) : (
+        <button className="btn-secondary" type="button" onClick={() => fileInputRef.current?.click()}>
+          <Icon name="upload" size={14} /> Choose image
         </button>
-      </div>
-      {!signature && <p className="editsign-hint">Draw above, then click the page to place it.</p>}
-    </>
+      )}
+
+      <label className="checkbox-row" style={{ marginTop: 4 }}>
+        <input type="checkbox" checked={removeBackground} onChange={(e) => toggleRemoveBackground(e.target.checked)} />
+        Remove white background
+      </label>
+    </div>
   )
 }

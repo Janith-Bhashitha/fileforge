@@ -117,7 +117,7 @@ export function AppShell() {
 
       <aside className={`sidebar${mobileNavOpen ? ' sidebar-open' : ''}`}>
         <div className="sidebar-brand">
-          <div className="sidebar-brand-mark">FF</div>
+          <img src="/logo.png" alt="" className="sidebar-brand-mark" />
           <span>FileForge</span>
           <button
             className="sidebar-close"

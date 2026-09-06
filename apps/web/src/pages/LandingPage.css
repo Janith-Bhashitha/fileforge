@@ -17,12 +17,9 @@
   height: 32px;
   border-radius: 8px;
   background: linear-gradient(135deg, #818cf8, #6366f1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 13px;
-  color: white;
+  object-fit: contain;
+  padding: 4px;
+  box-sizing: border-box;
   flex-shrink: 0;
 }
 
@@ -214,7 +211,7 @@
   width: 52px;
   height: 52px;
   border-radius: 12px;
-  font-size: 20px;
+  padding: 7px;
 }
 
 .landing-file-pdf {

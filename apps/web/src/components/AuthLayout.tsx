@@ -17,7 +17,7 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
       </div>
       <div className="auth-card">
         <div className="auth-brand">
-          <div className="auth-brand-mark">FF</div>
+          <img src="/logo.png" alt="" className="auth-brand-mark" />
           <span className="auth-brand-name">FileForge</span>
         </div>
         <h1 className="auth-title">{title}</h1>

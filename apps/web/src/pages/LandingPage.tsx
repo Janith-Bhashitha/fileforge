@@ -23,7 +23,7 @@ export function LandingPage() {
     <div className="landing">
       <header className="landing-nav">
         <div className="landing-brand">
-          <div className="landing-brand-mark">FF</div>
+          <img src="/logo.png" alt="" className="landing-brand-mark" />
           <span>FileForge</span>
         </div>
         <nav className="landing-nav-links">
@@ -79,7 +79,7 @@ export function LandingPage() {
             <div className="landing-file landing-file-doc">W</div>
             <div className="landing-file landing-file-xls">X</div>
             <div className="landing-file landing-file-main">
-              <div className="landing-brand-mark landing-brand-mark-lg">FF</div>
+              <img src="/logo.png" alt="FileForge" className="landing-brand-mark landing-brand-mark-lg" />
             </div>
             <div className="landing-file landing-file-img">IMG</div>
             <div className="landing-file landing-file-ppt">P</div>
@@ -113,7 +113,7 @@ export function LandingPage() {
 
       <footer className="landing-footer">
         <div className="landing-brand">
-          <div className="landing-brand-mark">FF</div>
+          <img src="/logo.png" alt="" className="landing-brand-mark" />
           <span>FileForge</span>
         </div>
         <span className="landing-footer-copy">Built for people who deal with too many file formats.</span>
