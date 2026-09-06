@@ -39,6 +39,3 @@ An all-in-one file conversion and processing platform — convert, batch process
 **Frontend** — React 19, TypeScript, [TanStack Query](https://tanstack.com/query), React Router, Vite, [pdfjs-dist](https://mozilla.github.io/pdf.js/) (code-split so it only loads on the Edit & Sign page).
 
 **Infrastructure** — Docker Compose (6 services: API + 4 workers + web/nginx), GitHub Actions CI/CD (build, test, and publish all 6 images on every merge to `main`), Terraform-managed AWS deployment (EC2, S3, IAM), Prometheus + Grafana for observability.
-
-ng external contributions — none is set yet._
-
